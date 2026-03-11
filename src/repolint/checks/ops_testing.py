@@ -6,7 +6,7 @@
 import subprocess
 
 from repolint.checks._base import Check, CheckResult
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT
+from repolint.config import CheckStatus
 from repolint.utils import clone_repository_locally, find_regexp_in_path
 
 
@@ -21,7 +21,7 @@ class OpsTestingCheck(Check):
         try:
             local_repo = clone_repository_locally(repo)
         except subprocess.CalledProcessError as e:
-            return {"result": CHECK_NOT_COMPLIANT, "message": f"Failed to clone repository: {e}"}
+            return CheckResult(CheckStatus.NOT_COMPLIANT, f"Failed to clone repository: {e}")
         if find_regexp_in_path(local_repo, pattern="harness", recursive=True):
-            return {"result": CHECK_NOT_COMPLIANT, "message": "Found references to harness."}
-        return {"result": CHECK_COMPLIANT, "message": "No reference to harness found."}
+            return CheckResult(CheckStatus.NOT_COMPLIANT, "Found references to harness.")
+        return CheckResult(CheckStatus.COMPLIANT, "No reference to harness found.")

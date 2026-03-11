@@ -25,6 +25,7 @@ from repolint.checks import (
     tf_v1,
 )
 from repolint.checks._base import _REGISTRY, AggregateCheck, Check, CheckResult, get_check_function
+from repolint.config import CheckStatus
 
 # Register AggregateCheck instances for every aggregate criterion.
 from repolint.criteria import list_criteria
@@ -39,6 +40,7 @@ __all__ = [
     "AggregateCheck",
     "Check",
     "CheckResult",
+    "CheckStatus",
     "charmlibs",
     "ck8s",
     "contains_charm",

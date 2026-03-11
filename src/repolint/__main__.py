@@ -8,6 +8,7 @@ import json
 import sys
 from pathlib import Path
 
+from repolint.checks import CheckResult
 from repolint.config import DEFAULT_CONFIG_FILE, REPORTS_PATH
 from repolint.criteria import configure_checks
 from repolint.report import (
@@ -55,11 +56,22 @@ def main() -> None:
     if json_file.exists():
         print(f"WARNING: using cached results, rm {json_file} to re-analyze.")
         with json_file.open() as fh:
-            results = json.load(fh)
+            raw = json.load(fh)
+        results = {
+            repo: {k: CheckResult.from_dict(v) for k, v in repo_results.items()}
+            for repo, repo_results in raw.items()
+        }
     else:
         results = analyze(repositories)
         with json_file.open(mode="w") as fh:
-            json.dump(results, fh, indent=2)
+            json.dump(
+                {
+                    repo: {k: v.to_dict() for k, v in repo_results.items()}
+                    for repo, repo_results in results.items()
+                },
+                fh,
+                indent=2,
+            )
 
     try:
         markdown_file.write_text(render_markdown_overview(results))

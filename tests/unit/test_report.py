@@ -7,7 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT
+from repolint.checks import CheckResult
+from repolint.config import CheckStatus
 from repolint.report import (
     analyze,
     analyze_repo,
@@ -47,29 +48,29 @@ def _results(repo: str, data: dict) -> dict:
 class TestRenderMarkdownDetails:
     def test_includes_repo_name_as_heading(self):
         results = {
-            "pfe_topic": {"result": CHECK_COMPLIANT, "message": ""},
+            "pfe_topic": CheckResult(CheckStatus.COMPLIANT, ""),
         }
         md = render_markdown_details("canonical/my-charm", results)
         assert "# canonical/my-charm" in md
 
     def test_includes_criterion_name_and_result(self):
         results = {
-            "pfe_topic": {"result": CHECK_COMPLIANT, "message": ""},
+            "pfe_topic": CheckResult(CheckStatus.COMPLIANT, ""),
         }
         md = render_markdown_details("canonical/my-charm", results)
         assert "pfe_topic" in md
-        assert CHECK_COMPLIANT in md
+        assert CheckStatus.COMPLIANT in md
 
     def test_includes_message_when_present(self):
         results = {
-            "pfe_topic": {"result": CHECK_NOT_COMPLIANT, "message": "No topic found."},
+            "pfe_topic": CheckResult(CheckStatus.NOT_COMPLIANT, "No topic found."),
         }
         md = render_markdown_details("canonical/my-charm", results)
         assert "No topic found." in md
 
     def test_skips_unknown_criterion(self):
         results = {
-            "unknown_criterion_xyz": {"result": CHECK_COMPLIANT, "message": ""},
+            "unknown_criterion_xyz": CheckResult(CheckStatus.COMPLIANT, ""),
         }
         md = render_markdown_details("canonical/my-charm", results)
         # Should not raise and should still produce heading
@@ -77,10 +78,7 @@ class TestRenderMarkdownDetails:
 
     def test_aggregate_label_shown(self):
         results = {
-            "github": {
-                "result": CHECK_COMPLIANT,
-                "message": "All subchecks are compliant.",
-            },
+            "github": CheckResult(CheckStatus.COMPLIANT, "All subchecks are compliant."),
         }
         md = render_markdown_details("canonical/my-charm", results)
         assert "(aggregate)" in md
@@ -103,7 +101,7 @@ class TestRenderMarkdownOverview:
             ]
             results = {
                 "canonical/repo-a": {
-                    "check_b": {"result": CHECK_COMPLIANT, "message": ""},
+                    "check_b": CheckResult(CheckStatus.COMPLIANT, ""),
                 }
             }
             md = render_markdown_overview(results)
@@ -123,7 +121,7 @@ class TestRenderMarkdownOverview:
             ]
             results = {
                 "canonical/my-charm": {
-                    "check_b": {"result": CHECK_COMPLIANT, "message": ""},
+                    "check_b": CheckResult(CheckStatus.COMPLIANT, ""),
                 }
             }
             md = render_markdown_overview(results)
@@ -156,8 +154,8 @@ class TestRenderMarkdownOverview:
             ]
             results = {
                 "canonical/my-charm": {
-                    "hidden_check": {"result": CHECK_COMPLIANT, "message": ""},
-                    "visible_check": {"result": CHECK_COMPLIANT, "message": ""},
+                    "hidden_check": CheckResult(CheckStatus.COMPLIANT, ""),
+                    "visible_check": CheckResult(CheckStatus.COMPLIANT, ""),
                 }
             }
             md = render_markdown_overview(results)
@@ -181,10 +179,9 @@ class TestAnalyzeRepo:
                 {"name": "check_a", "description": "A"},
                 {"name": "check_b", "description": "B", "depends_on": ["check_a"]},
             ]
-            mock_gcf.return_value = lambda repo, previous_results=None: {
-                "result": CHECK_COMPLIANT,
-                "message": "ok",
-            }
+            mock_gcf.return_value = lambda repo, previous_results=None: CheckResult(
+                CheckStatus.COMPLIANT, "ok"
+            )
             results = analyze_repo("canonical/test-repo")
 
         assert "check_a" in results
@@ -214,7 +211,7 @@ class TestAnalyze:
     def test_returns_results_for_all_repos(self):
         repos = ["canonical/repo-a", "canonical/repo-b"]
         with patch("repolint.report.analyze_repo") as mock_ar:
-            mock_ar.return_value = {"check_a": {"result": CHECK_COMPLIANT, "message": ""}}
+            mock_ar.return_value = {"check_a": CheckResult(CheckStatus.COMPLIANT, "")}
             results = analyze(repos)
         assert set(results.keys()) == set(repos)
 

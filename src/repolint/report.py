@@ -22,10 +22,10 @@ def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
         description = sanitize(check.description if check else "")
         markdown += (
             f"- {aggregate_label}"
-            f"<span title='{description}'>{criterion_name}</span>: {value['result']}\n"
+            f"<span title='{description}'>{criterion_name}</span>: {value.result}\n"
         )
-        if value.get("message"):
-            markdown += f"  - {value['message']}\n"
+        if value.message:
+            markdown += f"  - {value.message}\n"
         markdown += "\n"
     return markdown
 
@@ -52,8 +52,8 @@ def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
             result = repo_results.get(criterion["name"])
             if result is None:
                 raise RuntimeError(f"Missing result for {criterion['name']} in repository {repo}.")
-            msg = sanitize(result.get("message", ""))
-            row.append(f"<span title='{msg}'>{result.get('result', '')}</span>")
+            msg = sanitize(result.message)
+            row.append(f"<span title='{msg}'>{result.result}</span>")
         table.append("| " + " | ".join(row) + " |")
 
     return "\n".join(table) + "\n\nLast updated: " + datetime.now().isoformat()

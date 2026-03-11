@@ -6,7 +6,7 @@
 import subprocess
 
 from repolint.checks._base import Check, CheckResult
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT
+from repolint.config import CheckStatus
 from repolint.utils import clone_repository_locally, find_charmcraft_paths
 
 
@@ -21,11 +21,10 @@ class ContainsCharmCheck(Check):
         try:
             local_repo = clone_repository_locally(repo)
         except subprocess.CalledProcessError as e:
-            return {"result": CHECK_NOT_COMPLIANT, "message": f"Failed to clone repository: {e}"}
+            return CheckResult(CheckStatus.NOT_COMPLIANT, f"Failed to clone repository: {e}")
         charms = find_charmcraft_paths(local_repo)
         if charms:
-            return {
-                "result": CHECK_COMPLIANT,
-                "message": "Charms in: " + ", ".join(str(k) for k in charms),
-            }
-        return {"result": CHECK_NOT_COMPLIANT, "message": "No charms found in the repository."}
+            return CheckResult(
+                CheckStatus.COMPLIANT, "Charms in: " + ", ".join(str(k) for k in charms)
+            )
+        return CheckResult(CheckStatus.NOT_COMPLIANT, "No charms found in the repository.")

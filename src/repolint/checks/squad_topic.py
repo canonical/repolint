@@ -4,7 +4,7 @@
 """Check: repository has a squad-* GitHub topic."""
 
 from repolint.checks._base import Check, CheckResult
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT, SQUAD_TOPICS
+from repolint.config import SQUAD_TOPICS, CheckStatus
 from repolint.utils import get_repository_topics
 
 
@@ -20,5 +20,5 @@ class SquadTopicCheck(Check):
         """Check that the repository has a squad-xxx topic."""
         topics = get_repository_topics(repo)
         if any(topic in SQUAD_TOPICS for topic in topics):
-            return {"result": CHECK_COMPLIANT, "message": ""}
-        return {"result": CHECK_NOT_COMPLIANT, "message": "No squad topic found."}
+            return CheckResult(CheckStatus.COMPLIANT, "")
+        return CheckResult(CheckStatus.NOT_COMPLIANT, "No squad topic found.")

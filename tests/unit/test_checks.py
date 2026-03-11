@@ -8,21 +8,21 @@ from unittest.mock import patch
 import pytest
 
 from repolint.checks import Check, CheckResult, get_check_function
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT, CHECK_NOT_ELIGIBLE
+from repolint.config import CheckStatus
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal concrete Check subclasses for testing cross-cutting logic
 # ---------------------------------------------------------------------------
 
 
-def _make_simple_check(check_name: str, result: str = CHECK_COMPLIANT) -> Check:
+def _make_simple_check(check_name: str, result: CheckStatus = CheckStatus.COMPLIANT) -> Check:
     """Dynamically create a minimal Check subclass with a fixed run() result."""
 
     class _SimpleCheck(Check):
         name = check_name  # type: ignore[assignment]
 
         def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
-            return {"result": result, "message": "ran"}
+            return CheckResult(result, "ran")
 
     # Remove from registry so test helpers don't pollute other tests.
     from repolint.checks._base import _REGISTRY
@@ -43,7 +43,7 @@ class TestCheckExclusion:
             return_value={"name": "_test_excl_a", "excluded": ["canonical/excluded-repo"]},
         ):
             result = check("canonical/excluded-repo")
-        assert result["result"] == CHECK_NOT_ELIGIBLE
+        assert result.result == CheckStatus.NOT_ELIGIBLE
 
     def test_non_excluded_repo_runs_check(self):
         check = _make_simple_check("_test_excl_b")
@@ -52,8 +52,8 @@ class TestCheckExclusion:
             return_value={"name": "_test_excl_b", "excluded": ["canonical/other-repo"]},
         ):
             result = check("canonical/allowed-repo")
-        assert result["result"] == CHECK_COMPLIANT
-        assert result["message"] == "ran"
+        assert result.result == CheckStatus.COMPLIANT
+        assert result.message == "ran"
 
 
 # ---------------------------------------------------------------------------
@@ -64,24 +64,24 @@ class TestCheckExclusion:
 class TestCheckDependencies:
     def test_dependency_not_compliant_skips_check(self):
         check = _make_simple_check("_test_dep_a")
-        previous = {"dep_check": {"result": CHECK_NOT_COMPLIANT, "message": ""}}
+        previous = {"dep_check": CheckResult(CheckStatus.NOT_COMPLIANT, "")}
         with patch(
             "repolint.checks._base.get_criterion_by_name",
             return_value={"name": "_test_dep_a", "depends_on": ["dep_check"]},
         ):
             result = check("canonical/some-repo", previous_results=previous)
-        assert result["result"] == CHECK_NOT_ELIGIBLE
-        assert "dep_check" in result["message"]
+        assert result.result == CheckStatus.NOT_ELIGIBLE
+        assert "dep_check" in result.message
 
     def test_dependency_compliant_runs_check(self):
         check = _make_simple_check("_test_dep_b")
-        previous = {"dep_check": {"result": CHECK_COMPLIANT, "message": ""}}
+        previous = {"dep_check": CheckResult(CheckStatus.COMPLIANT, "")}
         with patch(
             "repolint.checks._base.get_criterion_by_name",
             return_value={"name": "_test_dep_b", "depends_on": ["dep_check"]},
         ):
             result = check("canonical/some-repo", previous_results=previous)
-        assert result["result"] == CHECK_COMPLIANT
+        assert result.result == CheckStatus.COMPLIANT
 
     def test_missing_dependency_raises(self):
         check = _make_simple_check("_test_dep_c")
@@ -104,29 +104,29 @@ class TestCheckAggregates:
     def test_all_subchecks_compliant_returns_compliant(self):
         check = _make_simple_check("_test_agg_a")
         previous = {
-            "sub_a": {"result": CHECK_COMPLIANT, "message": ""},
-            "sub_b": {"result": CHECK_COMPLIANT, "message": ""},
+            "sub_a": CheckResult(CheckStatus.COMPLIANT, ""),
+            "sub_b": CheckResult(CheckStatus.COMPLIANT, ""),
         }
         with patch(
             "repolint.checks._base.get_criterion_by_name",
             return_value={"name": "_test_agg_a", "aggregates": ["sub_a", "sub_b"]},
         ):
             result = check("canonical/some-repo", previous_results=previous)
-        assert result["result"] == CHECK_COMPLIANT
+        assert result.result == CheckStatus.COMPLIANT
 
     def test_one_subcheck_failing_returns_not_compliant(self):
         check = _make_simple_check("_test_agg_b")
         previous = {
-            "sub_a": {"result": CHECK_COMPLIANT, "message": ""},
-            "sub_b": {"result": CHECK_NOT_COMPLIANT, "message": "failed"},
+            "sub_a": CheckResult(CheckStatus.COMPLIANT, ""),
+            "sub_b": CheckResult(CheckStatus.NOT_COMPLIANT, "failed"),
         }
         with patch(
             "repolint.checks._base.get_criterion_by_name",
             return_value={"name": "_test_agg_b", "aggregates": ["sub_a", "sub_b"]},
         ):
             result = check("canonical/some-repo", previous_results=previous)
-        assert result["result"] == CHECK_NOT_COMPLIANT
-        assert "sub_b" in result["message"]
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "sub_b" in result.message
 
     def test_missing_subcheck_raises(self):
         check = _make_simple_check("_test_agg_c")
@@ -152,7 +152,7 @@ class TestCheckDescription:
             description = "A test description."
 
             def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
-                return {"result": CHECK_COMPLIANT, "message": ""}
+                return CheckResult(CheckStatus.COMPLIANT, "")
 
         from repolint.checks._base import _REGISTRY
 

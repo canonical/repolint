@@ -4,7 +4,7 @@
 """Check: repository has the 'platform-engineering' GitHub topic."""
 
 from repolint.checks._base import Check, CheckResult
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT
+from repolint.config import CheckStatus
 from repolint.utils import get_repository_topics
 
 
@@ -18,5 +18,5 @@ class PfeTopicCheck(Check):
         """Check that the repository has the 'platform-engineering' topic."""
         topics = get_repository_topics(repo)
         if "platform-engineering" in topics:
-            return {"result": CHECK_COMPLIANT, "message": ""}
-        return {"result": CHECK_NOT_COMPLIANT, "message": "No platform-engineering topic found."}
+            return CheckResult(CheckStatus.COMPLIANT, "")
+        return CheckResult(CheckStatus.NOT_COMPLIANT, "No platform-engineering topic found.")

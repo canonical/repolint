@@ -4,12 +4,28 @@
 """Base class, registry and cross-cutting helpers for repository compliance checks."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT, CHECK_NOT_ELIGIBLE
+from repolint.config import CheckStatus
 from repolint.criteria import get_criterion_by_name
 
-# Type alias for a check result dict: {"result": ..., "message": ...}
-CheckResult = dict[str, str]
+
+@dataclass
+class CheckResult:
+    """Result of a single compliance check."""
+
+    result: CheckStatus
+    message: str = field(default="")
+
+    def to_dict(self) -> dict[str, str]:
+        """Serialise to a plain dict for JSON output."""
+        return {"result": self.result.value, "message": self.message}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, str]) -> "CheckResult":
+        """Deserialise from a plain dict (e.g. loaded from JSON cache)."""
+        return cls(result=CheckStatus(data["result"]), message=data.get("message", ""))
+
 
 # Registry mapping criterion name → Check instance
 _REGISTRY: dict[str, "Check"] = {}
@@ -18,7 +34,7 @@ _REGISTRY: dict[str, "Check"] = {}
 def _check_exclusion(repo: str, criterion: dict) -> CheckResult | None:
     """Return NOT_ELIGIBLE if *repo* is in the criterion's exclusion list, else None."""
     if repo in criterion.get("excluded", []):
-        return {"result": CHECK_NOT_ELIGIBLE, "message": "Repository is excluded from this check."}
+        return CheckResult(CheckStatus.NOT_ELIGIBLE, "Repository is excluded from this check.")
     return None
 
 
@@ -34,12 +50,12 @@ def _check_dependencies(
             raise RuntimeError(
                 f"[{repo}][{name}] Couldn't find the result of the {dependency!r} dependency."
             )
-        dep_result = previous_results[dependency]["result"]
-        if dep_result != CHECK_COMPLIANT:
-            return {
-                "result": CHECK_NOT_ELIGIBLE,
-                "message": f"Skipped. Depends on {dependency} which is {dep_result}.",
-            }
+        dep_result = previous_results[dependency].result
+        if dep_result != CheckStatus.COMPLIANT:
+            return CheckResult(
+                CheckStatus.NOT_ELIGIBLE,
+                f"Skipped. Depends on {dependency} which is {dep_result}.",
+            )
     return None
 
 
@@ -54,17 +70,17 @@ def _check_aggregates(
     if missing:
         raise RuntimeError(f"Couldn't find the result of {missing} for {repo}.")
     failed = [
-        name for name in aggregates if previous_results[name]["result"] == CHECK_NOT_COMPLIANT
+        name for name in aggregates if previous_results[name].result == CheckStatus.NOT_COMPLIANT
     ]
     if failed:
-        return {
-            "result": CHECK_NOT_COMPLIANT,
-            "message": f"Subcheck(s) {', '.join(failed)} is/are not compliant.",
-        }
-    return {
-        "result": CHECK_COMPLIANT,
-        "message": f"All subchecks {', '.join(aggregates)} are compliant.",
-    }
+        return CheckResult(
+            CheckStatus.NOT_COMPLIANT,
+            f"Subcheck(s) {', '.join(failed)} is/are not compliant.",
+        )
+    return CheckResult(
+        CheckStatus.COMPLIANT,
+        f"All subchecks {', '.join(aggregates)} are compliant.",
+    )
 
 
 class Check(ABC):

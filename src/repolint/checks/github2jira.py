@@ -6,7 +6,7 @@
 import subprocess
 
 from repolint.checks._base import Check, CheckResult
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT
+from repolint.config import CheckStatus
 from repolint.utils import clone_repository_locally
 
 
@@ -21,11 +21,10 @@ class Github2JiraCheck(Check):
         try:
             local_repo = clone_repository_locally(repo)
         except subprocess.CalledProcessError as e:
-            return {"result": CHECK_NOT_COMPLIANT, "message": f"Failed to clone repository: {e}"}
+            return CheckResult(CheckStatus.NOT_COMPLIANT, f"Failed to clone repository: {e}")
         integration_conf_file = local_repo / ".github/.jira_sync_config.yaml"
         if integration_conf_file.exists():
-            return {"result": CHECK_COMPLIANT, "message": ""}
-        return {
-            "result": CHECK_NOT_COMPLIANT,
-            "message": "No GitHub to Jira integration config found.",
-        }
+            return CheckResult(CheckStatus.COMPLIANT, "")
+        return CheckResult(
+            CheckStatus.NOT_COMPLIANT, "No GitHub to Jira integration config found."
+        )

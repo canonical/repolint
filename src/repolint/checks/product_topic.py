@@ -4,7 +4,7 @@
 """Check: repository has a product-* GitHub topic."""
 
 from repolint.checks._base import Check, CheckResult
-from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT
+from repolint.config import CheckStatus
 from repolint.utils import get_repository_topics
 
 
@@ -18,5 +18,5 @@ class ProductTopicCheck(Check):
         """Check that the repository has a product-xxx topic."""
         topics = get_repository_topics(repo)
         if any(topic.startswith("product-") for topic in topics):
-            return {"result": CHECK_COMPLIANT, "message": ""}
-        return {"result": CHECK_NOT_COMPLIANT, "message": "No product topic found."}
+            return CheckResult(CheckStatus.COMPLIANT, "")
+        return CheckResult(CheckStatus.NOT_COMPLIANT, "No product topic found.")
