@@ -3,7 +3,7 @@
 
 [project]
 name = "repolint"
-version = "0.2.1"
+version = "0.2.2"
 description = "Repository compliance dashboard for Canonical Platform Engineering."
 readme = "README.md"
 requires-python = ">=3.12"

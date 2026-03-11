@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from repolint.checks import CheckResult
+from repolint.checks import CheckResult, list_checks
 from repolint.config import CheckStatus
 from repolint.report import (
     analyze,
@@ -89,6 +89,20 @@ class TestRenderMarkdownDetails:
         md = render_markdown_details("canonical/my-charm", results)
         assert "# canonical/my-charm" in md
         assert "unknown_criterion_xyz" not in md
+
+    def test_github_topics_nested_under_github_real_registry(self):
+        """Using the real check registry, github_topics must appear nested under github."""
+        results = {c.name: CheckResult(CheckStatus.COMPLIANT, "") for c in list_checks()}
+        md = render_markdown_details("canonical/my-charm", results)
+        lines = md.splitlines()
+        github_line = next(
+            i
+            for i, ln in enumerate(lines)
+            if ln.startswith("- ") and "github" in ln and "github_topics" not in ln
+        )
+        topics_line = next(i for i, ln in enumerate(lines) if "github_topics" in ln)
+        assert topics_line > github_line, "github_topics must appear after github parent"
+        assert lines[topics_line].startswith("  "), "github_topics must be indented under github"
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +220,36 @@ class TestAnalyzeRepo:
             results = analyze_repo("canonical/test-repo")
 
         assert results["check_a"].result == CheckStatus.COMPLIANT
+
+    def test_all_registered_checks_in_results(self, tmp_path):
+        """analyze_repo must return a result keyed by every check in list_checks()."""
+        # Minimal charm repo structure so contains_charm returns COMPLIANT
+        (tmp_path / "charmcraft.yaml").write_text("name: test\n")
+        (tmp_path / ".github").mkdir()
+
+        expected_names = {c.name for c in list_checks()}
+
+        with (
+            patch("repolint.checks.github_topics.get_repository_topics", return_value=[]),
+            patch(
+                "repolint.checks.contains_charm.clone_repository_locally", return_value=tmp_path
+            ),
+            patch(
+                "repolint.checks.contains_k8s_charm.clone_repository_locally",
+                return_value=tmp_path,
+            ),
+            patch("repolint.checks.github2jira.clone_repository_locally", return_value=tmp_path),
+            patch("repolint.checks.ops_testing.clone_repository_locally", return_value=tmp_path),
+            patch("repolint.checks.juju4.clone_repository_locally", return_value=tmp_path),
+            patch("repolint.checks.ck8s.clone_repository_locally", return_value=tmp_path),
+            patch("repolint.checks.jubilant.clone_repository_locally", return_value=tmp_path),
+            patch("repolint.checks.tf_v1.clone_repository_locally", return_value=tmp_path),
+            patch("repolint.checks.charmlibs.clone_repository_locally", return_value=tmp_path),
+        ):
+            results = analyze_repo("canonical/my-charm")
+
+        assert set(results.keys()) == expected_names
+        assert "github_topics" in results
 
 
 # ---------------------------------------------------------------------------
