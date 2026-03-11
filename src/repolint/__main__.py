@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from repolint.checks import CheckResult, configure_checks
-from repolint.config import DEFAULT_CONFIG_FILE, REPORTS_PATH
+from repolint.config import DEFAULT_CONFIG_FILE, DEFAULT_REPORTS_DIR
 from repolint.report import (
     analyze,
     render_markdown_details,
@@ -45,6 +45,13 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--output-dir",
+        metavar="DIR",
+        type=Path,
+        default=DEFAULT_REPORTS_DIR,
+        help=f"Directory where reports are written (default: {DEFAULT_REPORTS_DIR}).",
+    )
+    parser.add_argument(
         "--output",
         metavar="NAME",
         default="quality",
@@ -71,6 +78,8 @@ def main() -> None:
     except ValueError as exc:
         parser.error(str(exc))
 
+    reports_dir: Path = args.output_dir
+
     configure_checks(config.get("checks", {}))
 
     try:
@@ -79,10 +88,10 @@ def main() -> None:
         parser.error(f"Failed to resolve repositories: {exc}")
         return  # unreachable; satisfies type checkers
 
-    REPORTS_PATH.mkdir(exist_ok=True)
+    reports_dir.mkdir(parents=True, exist_ok=True)
 
-    json_file = REPORTS_PATH / f"{args.output}.json"
-    markdown_file = REPORTS_PATH / f"{args.output}.md"
+    json_file = reports_dir / f"{args.output}.json"
+    markdown_file = reports_dir / f"{args.output}.md"
 
     if json_file.exists():
         print(f"WARNING: using cached results, rm {json_file} to re-analyze.")
@@ -111,10 +120,10 @@ def main() -> None:
         sys.exit(1)
 
     for repo, repo_results in results.items():
-        details_file = REPORTS_PATH / get_repository_details_filename(repo)
+        details_file = reports_dir / get_repository_details_filename(repo)
         details_file.write_text(render_markdown_details(repo, repo_results))
 
-    print(f"Reports written to {REPORTS_PATH}/")
+    print(f"Reports written to {reports_dir}/")
 
 
 if __name__ == "__main__":

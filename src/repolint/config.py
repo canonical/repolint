@@ -8,7 +8,7 @@ from enum import StrEnum
 from pathlib import Path
 
 DEFAULT_CONFIG_FILE = Path("repolint.yaml")
-REPORTS_PATH = Path("reports/")
+DEFAULT_REPORTS_DIR = Path("reports")
 TMP_DIR = Path(tempfile.gettempdir()) / "repo_clones"
 
 
