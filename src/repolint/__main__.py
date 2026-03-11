@@ -44,6 +44,15 @@ def _build_parser() -> argparse.ArgumentParser:
             "excluded. Example: 'org:canonical topic:platform-engineering topic:squad-emea'."
         ),
     )
+    parser.add_argument(
+        "--output",
+        metavar="NAME",
+        default="quality",
+        help=(
+            "Base name for the report files (default: quality). "
+            "Produces NAME.json, NAME.md, and NAME-<repo>-details.md."
+        ),
+    )
     return parser
 
 
@@ -72,8 +81,8 @@ def main() -> None:
 
     REPORTS_PATH.mkdir(exist_ok=True)
 
-    json_file = REPORTS_PATH / "quality.json"
-    markdown_file = REPORTS_PATH / "quality.md"
+    json_file = REPORTS_PATH / f"{args.output}.json"
+    markdown_file = REPORTS_PATH / f"{args.output}.md"
 
     if json_file.exists():
         print(f"WARNING: using cached results, rm {json_file} to re-analyze.")
@@ -102,7 +111,7 @@ def main() -> None:
         sys.exit(1)
 
     for repo, repo_results in results.items():
-        details_file = REPORTS_PATH / get_repository_details_filename(repo)
+        details_file = REPORTS_PATH / get_repository_details_filename(repo, args.output)
         details_file.write_text(render_markdown_details(repo, repo_results))
 
     print(f"Reports written to {REPORTS_PATH}/")

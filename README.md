@@ -90,6 +90,7 @@ repolint [--config PATH]
 |---|---|---|
 | `--config PATH` | `repolint.yaml` | Path to the YAML configuration file. Optional when `--query` is used. |
 | `--query QUERY` | _(none)_ | GitHub search query; results merged with config repositories. Archived repos are excluded automatically. |
+| `--output NAME` | `quality` | Base name for report files: `NAME.json`, `NAME.md`, `NAME-<repo>-details.md`. |
 
 ### Examples
 

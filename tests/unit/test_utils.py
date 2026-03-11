@@ -223,6 +223,10 @@ class TestGetRepositoryDetailsFilename:
         result = get_repository_details_filename("org/repo")
         assert result == "quality-org-repo-details.md"
 
+    def test_custom_output(self):
+        result = get_repository_details_filename("org/repo", output="emea")
+        assert result == "emea-org-repo-details.md"
+
 
 class TestFindFilesInPath:
     def test_finds_files(self, tmp_path):
