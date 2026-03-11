@@ -101,8 +101,9 @@ def search_repositories_by_query(query: str) -> list[str]:
         "org:canonical topic:platform-engineering topic:squad-emea"
 
     The query string is split on whitespace; each token becomes a positional
-    argument to ``gh search repos``.  Results are returned in the order
-    GitHub returns them, deduplicated.
+    argument to ``gh search repos``.  ``archived:false`` is always appended to
+    exclude archived repositories.  Results are returned in the order GitHub
+    returns them, deduplicated.
 
     Raises :exc:`subprocess.CalledProcessError` if the ``gh`` CLI fails.
     """
@@ -111,6 +112,7 @@ def search_repositories_by_query(query: str) -> list[str]:
         "search",
         "repos",
         *query.split(),
+        "archived:false",
         "--json",
         "nameWithOwner",
         "--jq",

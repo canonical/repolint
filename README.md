@@ -47,8 +47,9 @@ Each entry is a fully-qualified GitHub repository name in `org/repo` format.
 repository_query: "org:canonical topic:platform-engineering topic:squad-emea"
 ```
 
-The query is passed directly to `gh search repos`.  Results are merged with any
-repositories listed under `repositories`.
+The query is passed directly to `gh search repos`.  `archived:false` is
+automatically appended, so archived repositories are never included.
+Results are merged with any repositories listed under `repositories`.
 
 Both keys can be used together; the final list is deduplicated while preserving
 order (static list first, then query results).

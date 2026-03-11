@@ -117,6 +117,7 @@ class TestSearchRepositoriesByQuery:
         assert "org:canonical" in call_args
         assert "topic:x" in call_args
         assert "topic:y" in call_args
+        assert "archived:false" in call_args
 
     def test_deduplicates_results(self):
         mock_output = "canonical/charm-a\ncanonical/charm-a\ncanonical/charm-b\n"

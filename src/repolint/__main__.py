@@ -37,8 +37,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "GitHub repository search query whose results are merged with the "
-            "repositories from the config file, e.g. "
-            "'org:canonical topic:platform-engineering topic:squad-emea'."
+            "repositories from the config file. Archived repositories are automatically "
+            "excluded. Example: 'org:canonical topic:platform-engineering topic:squad-emea'."
         ),
     )
     return parser
