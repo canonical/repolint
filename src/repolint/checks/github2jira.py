@@ -14,6 +14,7 @@ class Github2JiraCheck(Check):
     """Check that the repository has a GitHub-to-Jira sync configuration."""
 
     name = "github2jira"
+    description = "Repository has GitHub to Jira integration set up. To fix it, add .github/.jira_sync_config.yaml."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository has a GitHub-to-Jira sync configuration."""

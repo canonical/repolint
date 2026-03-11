@@ -12,6 +12,7 @@ class ProductTopicCheck(Check):
     """Check that the repository has a product-xxx topic."""
 
     name = "product_topic"
+    description = "Repository has a product-xxx topic. To fix it, add the topic via canonical-repo-automation."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository has a product-xxx topic."""

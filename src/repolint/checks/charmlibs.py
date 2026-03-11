@@ -19,6 +19,7 @@ class CharmLibsCheck(Check):
     """
 
     name = "charmlibs"
+    description = "Repository uses charmlibs for shared code."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository does not use deprecated operator_libs_linux."""

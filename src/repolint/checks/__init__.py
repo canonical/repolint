@@ -31,7 +31,9 @@ from repolint.criteria import list_criteria
 
 for _criterion in list_criteria():
     if _criterion.get("aggregates"):
-        _REGISTRY[_criterion["name"]] = AggregateCheck(_criterion["name"])
+        _REGISTRY[_criterion["name"]] = AggregateCheck(
+            _criterion["name"], _criterion["description"]
+        )
 
 __all__ = [
     "AggregateCheck",

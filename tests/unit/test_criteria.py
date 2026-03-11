@@ -12,12 +12,9 @@ class TestListCriteria:
         assert isinstance(result, list)
         assert len(result) > 0
 
-    def test_each_criterion_has_name_and_description(self):
+    def test_each_criterion_has_name(self):
         for criterion in list_criteria():
             assert "name" in criterion, f"Criterion missing 'name': {criterion}"
-            assert "description" in criterion, (
-                f"Criterion {criterion['name']!r} missing 'description'"
-            )
 
     def test_all_depends_on_reference_earlier_criteria(self):
         """Each depends_on entry must refer to a criterion that appears earlier."""

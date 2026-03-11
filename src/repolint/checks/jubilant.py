@@ -14,6 +14,7 @@ class JubilantCheck(Check):
     """Check that all charms use Jubilant for integration testing."""
 
     name = "jubilant"
+    description = "Repository uses Jubilant for charm testing."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that all charms use Jubilant for integration testing."""

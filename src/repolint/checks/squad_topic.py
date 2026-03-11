@@ -12,6 +12,9 @@ class SquadTopicCheck(Check):
     """Check that the repository has a squad-xxx topic."""
 
     name = "squad_topic"
+    description = (
+        "Repository has a squad-xxx topic. To fix it, add the topic via canonical-repo-automation."
+    )
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository has a squad-xxx topic."""

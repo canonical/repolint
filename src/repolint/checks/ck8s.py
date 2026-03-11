@@ -14,6 +14,7 @@ class Ck8sCheck(Check):
     """Check that the repository's GitHub workflows use canonical Kubernetes."""
 
     name = "ck8s"
+    description = "Repository uses CK8s."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository's GitHub workflows use canonical Kubernetes."""

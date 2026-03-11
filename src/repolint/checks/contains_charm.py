@@ -14,6 +14,7 @@ class ContainsCharmCheck(Check):
     """Check that the repository contains at least one charm."""
 
     name = "contains_charm"
+    description = "Repository contains at least one charm (charmcraft.yaml file)."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository contains at least one charm."""

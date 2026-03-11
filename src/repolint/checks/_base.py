@@ -70,12 +70,13 @@ def _check_aggregates(
 class Check(ABC):
     """Abstract base class for all repository compliance checks.
 
-    Subclasses must define a ``name`` class attribute and implement ``run()``.
-    Defining ``name`` on a subclass automatically registers an instance in the
-    global ``_REGISTRY`` via ``__init_subclass__``.
+    Subclasses must define ``name`` and ``description`` as class attributes
+    and implement ``run()``.  Defining ``name`` on a subclass automatically
+    registers an instance in the global ``_REGISTRY`` via ``__init_subclass__``.
     """
 
     name: str  # class attribute — subclasses must define this
+    description: str  # human-readable description — subclasses must define this
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
@@ -84,12 +85,6 @@ class Check(ABC):
         name_attr = cls.__dict__.get("name")
         if isinstance(name_attr, str):
             _REGISTRY[cls.name] = cls()
-
-    @property
-    def description(self) -> str:
-        """Human-readable description, sourced from the criteria catalogue."""
-        criterion = get_criterion_by_name(self.name)
-        return criterion["description"] if criterion else ""
 
     @abstractmethod
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
@@ -124,12 +119,17 @@ class Check(ABC):
 class AggregateCheck(Check):
     """Check whose result is derived entirely from sub-checks; ``run()`` is never called."""
 
-    def __init__(self, aggregate_name: str) -> None:
+    def __init__(self, aggregate_name: str, description: str = "") -> None:
         self._name = aggregate_name
+        self._description = description
 
     @property  # type: ignore[override]
     def name(self) -> str:  # type: ignore[override]
         return self._name
+
+    @property  # type: ignore[override]
+    def description(self) -> str:  # type: ignore[override]
+        return self._description
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         raise RuntimeError(

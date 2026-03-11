@@ -17,8 +17,9 @@ def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
         criterion_info = get_criterion_by_name(criterion_name)
         if criterion_info is None:
             continue
+        check = get_check_function(criterion_name)
         aggregate_label = "(aggregate) " if criterion_info.get("aggregates") else ""
-        description = sanitize(criterion_info["description"])
+        description = sanitize(check.description if check else "")
         markdown += (
             f"- {aggregate_label}"
             f"<span title='{description}'>{criterion_name}</span>: {value['result']}\n"
@@ -34,7 +35,8 @@ def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
     visible_criteria = [c for c in list_criteria() if not c.get("hidden")]
     headers = ["Repository"] + [
         "<span title='{desc}'>{name}</span>".format(
-            desc=sanitize(c["description"]), name=c["name"]
+            desc=sanitize(check.description if (check := get_check_function(c["name"])) else ""),
+            name=c["name"],
         )
         for c in visible_criteria
     ]

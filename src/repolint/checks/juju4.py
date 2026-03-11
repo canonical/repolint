@@ -14,6 +14,7 @@ class Juju4Check(Check):
     """Check that the repository has at least one workflow targeting Juju 4."""
 
     name = "juju4"
+    description = "Repository has tests for Juju 4."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository has at least one workflow targeting Juju 4."""

@@ -14,6 +14,7 @@ class ContainsK8sCharmCheck(Check):
     """Check that the repository contains at least one Kubernetes charm."""
 
     name = "contains_k8s_charm"
+    description = "Repository contains at least one Kubernetes charm."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository contains at least one Kubernetes charm."""

@@ -141,23 +141,35 @@ class TestCheckAggregates:
 
 
 # ---------------------------------------------------------------------------
-# Check.description property
+# Check.description — class attribute
 # ---------------------------------------------------------------------------
 
 
 class TestCheckDescription:
-    def test_description_from_criterion(self):
-        check = _make_simple_check("_test_desc_a")
-        with patch(
-            "repolint.checks._base.get_criterion_by_name",
-            return_value={"name": "_test_desc_a", "description": "A test description."},
-        ):
-            assert check.description == "A test description."
+    def test_description_is_class_attribute(self):
+        class _DescCheck(Check):
+            name = "_test_desc_a"  # type: ignore[assignment]
+            description = "A test description."
 
-    def test_description_empty_for_unknown_criterion(self):
-        check = _make_simple_check("_test_desc_b")
-        with patch("repolint.checks._base.get_criterion_by_name", return_value=None):
-            assert check.description == ""
+            def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+                return {"result": CHECK_COMPLIANT, "message": ""}
+
+        from repolint.checks._base import _REGISTRY
+
+        check = _REGISTRY.pop("_test_desc_a")
+        assert check.description == "A test description."
+
+    def test_leaf_checks_have_non_empty_description(self):
+        """Every leaf check registered in the package must have a non-empty description."""
+        from repolint.criteria import list_criteria
+
+        for criterion in list_criteria():
+            instance = get_check_function(criterion["name"])
+            assert instance is not None
+            assert isinstance(instance.description, str), (
+                f"{criterion['name']}.description is not a str"
+            )
+            assert instance.description, f"{criterion['name']}.description is empty"
 
 
 # ---------------------------------------------------------------------------
