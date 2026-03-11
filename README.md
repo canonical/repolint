@@ -40,6 +40,23 @@ Each entry is a fully-qualified GitHub repository name in `org/repo` format.
 
 A different config file can be passed via the `--config` flag (see [Usage](#usage)).
 
+### Excluding repositories from specific checks
+
+Individual repositories can be excluded from a check via the `checks` key:
+
+```yaml
+repositories:
+  - canonical/my-charm
+
+checks:
+  pfe_topic:
+    excluded:
+      - canonical/my-charm   # this repo doesn't need the pfe topic
+  github2jira:
+    excluded:
+      - canonical/my-charm   # no Jira integration required
+```
+
 ## Usage
 
 ```bash
@@ -77,6 +94,8 @@ Reports are written to a `reports/` directory in the working directory:
 ## Checks
 
 Each repository is evaluated against the following criteria.
+Results are cached in `reports/quality.json` so subsequent runs only re-run
+checks for repositories that have not been analysed yet.
 
 ### Aggregate checks (shown in the overview table)
 
@@ -104,58 +123,15 @@ Each repository is evaluated against the following criteria.
 | `ck8s` | GitHub workflows set `use-canonical-k8s: true` |
 | `tf_v1` | All `versions.tf` files pin Juju provider `~> 1.*` |
 
-## Development
+### Check result symbols
 
-Clone the repository and install the development tooling:
+| Symbol | Meaning |
+|---|---|
+| ✅ | Compliant |
+| ❌ | Not compliant |
+| n/a | Not eligible (dependency not met, or repository explicitly excluded) |
 
-```bash
-git clone https://github.com/canonical/repolint
-cd repolint
-uv sync --all-groups
-```
+## Contributing
 
-### Running checks
-
-```bash
-tox -e lint      # codespell + ruff + mypy
-tox -e unit      # pytest + coverage
-tox -e static    # bandit (medium+ severity)
-tox -e fmt       # auto-format with ruff
-```
-
-> **Note:** The `tox.toml` file requires tox ≥ 4.21 with the
-> [`tox-uv`](https://github.com/tox-dev/tox-uv) plugin. The
-> `[tool.tox.legacy_tox_ini]` section in `pyproject.toml` provides
-> compatibility with the system tox (≥ 4.0).
->
-> ```bash
-> # Using system tox (≥ 4.0)
-> tox -e unit
->
-> # Using uv-native runner (requires tox-uv)
-> uvx --with tox-uv tox -e unit
-> ```
-
-### Project layout
-
-```
-src/repolint/
-├── config.py      # Constants (check symbols, paths, defaults)
-├── criteria.py    # Check catalogue — add new checks here
-├── checks.py      # @check decorator, registry, check implementations
-├── report.py      # Report rendering and analysis orchestration
-├── __main__.py    # CLI entry point
-tests/unit/        # Unit tests (pytest)
-repolint.yaml      # Repository list (create your own — not committed)
-reports/           # Generated reports (git-ignored)
-```
-
-### Adding a new check
-
-1. Add an entry to `list_criteria()` in `src/repolint/criteria.py`.
-2. Implement `check_repository_<name>()` in `src/repolint/checks.py`, decorated
-   with `@check`.
-3. If the new check is an aggregate of existing sub-checks, set `"aggregates"` in
-   the criteria entry and use `aggregate_check` as the implementation — no
-   function body needed.
-4. Add unit tests in `tests/unit/`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project layout,
+and instructions for adding new checks.
