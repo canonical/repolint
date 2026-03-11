@@ -48,10 +48,10 @@ class TestLoadConfig:
         config = tmp_path / "repolint.yaml"
         config.write_text(
             "repositories:\n  - canonical/charm-a\n"
-            "checks:\n  squad_topic:\n    excluded:\n      - canonical/cbartz-runner-testing\n"
+            "checks:\n  github2jira:\n    excluded:\n      - canonical/some-repo\n"
         )
         result = load_config(config)
-        assert result["checks"]["squad_topic"]["excluded"] == ["canonical/cbartz-runner-testing"]
+        assert result["checks"]["github2jira"]["excluded"] == ["canonical/some-repo"]
 
     def test_checks_section_is_optional(self, tmp_path):
         config = tmp_path / "repolint.yaml"
@@ -86,18 +86,45 @@ class TestLoadConfig:
     def test_raises_when_check_config_not_a_mapping(self, tmp_path):
         config = tmp_path / "repolint.yaml"
         config.write_text(
-            "repositories:\n  - canonical/charm-a\nchecks:\n  squad_topic: not-a-dict\n"
+            "repositories:\n  - canonical/charm-a\nchecks:\n  github2jira: not-a-dict\n"
         )
-        with pytest.raises(ValueError, match="squad_topic"):
+        with pytest.raises(ValueError, match="github2jira"):
             load_config(config)
 
     def test_raises_when_excluded_not_a_list(self, tmp_path):
         config = tmp_path / "repolint.yaml"
         config.write_text(
             "repositories:\n  - canonical/charm-a\n"
-            "checks:\n  squad_topic:\n    excluded: canonical/bad\n"
+            "checks:\n  github2jira:\n    excluded: canonical/bad\n"
         )
         with pytest.raises(ValueError, match="excluded"):
+            load_config(config)
+
+    def test_loads_github_topics_patterns(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "checks:\n  github_topics:\n    patterns:\n      - '^squad-'\n      - '^product-'\n"
+        )
+        result = load_config(config)
+        assert result["checks"]["github_topics"]["patterns"] == ["^squad-", "^product-"]
+
+    def test_raises_when_patterns_not_a_list(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "checks:\n  github_topics:\n    patterns: not-a-list\n"
+        )
+        with pytest.raises(ValueError, match="patterns"):
+            load_config(config)
+
+    def test_raises_when_pattern_item_not_a_string(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "checks:\n  github_topics:\n    patterns:\n      - 123\n"
+        )
+        with pytest.raises(ValueError, match="patterns"):
             load_config(config)
 
 

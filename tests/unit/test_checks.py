@@ -3,6 +3,8 @@
 
 """Unit tests for repolint.checks — Check base class and registry."""
 
+from unittest.mock import patch
+
 import pytest
 
 from repolint.checks import Check, CheckResult, ParentCheck, get_check, list_checks
@@ -184,6 +186,70 @@ class TestCheckDescription:
 
 
 # ---------------------------------------------------------------------------
+# GithubTopicsCheck
+# ---------------------------------------------------------------------------
+
+
+class TestGithubTopicsCheck:
+    def setup_method(self):
+        configure_checks({})
+
+    def teardown_method(self):
+        configure_checks({})
+
+    def _get_check(self):
+        check = get_check("github_topics")
+        assert check is not None
+        return check
+
+    def test_no_patterns_returns_compliant(self):
+        """With no patterns configured the check passes unconditionally."""
+        configure_checks({"github_topics": {"patterns": []}})
+        with patch(
+            "repolint.checks.github_topics.get_repository_topics", return_value=["squad-emea"]
+        ):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_matching_pattern_returns_compliant(self):
+        configure_checks({"github_topics": {"patterns": ["^squad-"]}})
+        with patch(
+            "repolint.checks.github_topics.get_repository_topics",
+            return_value=["squad-emea", "charm"],
+        ):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_missing_pattern_returns_not_compliant(self):
+        configure_checks({"github_topics": {"patterns": ["^squad-", "^product-"]}})
+        with patch(
+            "repolint.checks.github_topics.get_repository_topics",
+            return_value=["squad-emea"],  # no product-* topic
+        ):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "^product-" in result.message
+
+    def test_all_patterns_must_match(self):
+        configure_checks({"github_topics": {"patterns": ["^squad-", "^product-", "^charm$"]}})
+        with patch(
+            "repolint.checks.github_topics.get_repository_topics",
+            return_value=["squad-emea", "product-openstack"],
+            # missing 'charm' topic
+        ):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "^charm$" in result.message
+
+    def test_no_config_returns_compliant(self):
+        """With no github_topics config at all, the check passes."""
+        configure_checks({})
+        with patch("repolint.checks.github_topics.get_repository_topics", return_value=[]):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+
+# ---------------------------------------------------------------------------
 # __init_subclass__ enforcement
 # ---------------------------------------------------------------------------
 
@@ -221,7 +287,7 @@ class TestInitSubclassEnforcement:
 
 class TestGetCheckFunction:
     def test_known_check_is_registered(self):
-        instance = get_check("squad_topic")
+        instance = get_check("github_topics")
         assert instance is not None
         assert callable(instance)
         assert isinstance(instance, Check)
@@ -295,31 +361,31 @@ class TestConfigureChecks:
         configure_checks({})
 
     def test_configure_sets_exclusions(self):
-        configure_checks({"squad_topic": {"excluded": ["canonical/extra-repo"]}})
-        check = get_check("squad_topic")
+        configure_checks({"github2jira": {"excluded": ["canonical/extra-repo"]}})
+        check = get_check("github2jira")
         assert check is not None
         result = check("canonical/extra-repo")
         assert result.result == CheckStatus.NOT_ELIGIBLE
 
     def test_configure_non_excluded_repo_runs(self):
-        configure_checks({"squad_topic": {"excluded": ["canonical/excluded-repo"]}})
-        check = get_check("squad_topic")
+        configure_checks({"github2jira": {"excluded": ["canonical/excluded-repo"]}})
+        check = get_check("github2jira")
         assert check is not None
         from repolint.checks._base import _checks_overrides
 
-        assert "canonical/excluded-repo" in _checks_overrides.get("squad_topic", {}).get(
+        assert "canonical/excluded-repo" in _checks_overrides.get("github2jira", {}).get(
             "excluded", []
         )
-        assert "canonical/allowed-repo" not in _checks_overrides.get("squad_topic", {}).get(
+        assert "canonical/allowed-repo" not in _checks_overrides.get("github2jira", {}).get(
             "excluded", []
         )
 
     def test_configure_replaces_previous_overrides(self):
-        configure_checks({"squad_topic": {"excluded": ["canonical/first-repo"]}})
-        configure_checks({"squad_topic": {"excluded": ["canonical/second-repo"]}})
+        configure_checks({"github2jira": {"excluded": ["canonical/first-repo"]}})
+        configure_checks({"github2jira": {"excluded": ["canonical/second-repo"]}})
         from repolint.checks._base import _checks_overrides
 
-        excluded = _checks_overrides.get("squad_topic", {}).get("excluded", [])
+        excluded = _checks_overrides.get("github2jira", {}).get("excluded", [])
         assert "canonical/second-repo" in excluded
         assert "canonical/first-repo" not in excluded
 
@@ -328,7 +394,7 @@ class TestConfigureChecks:
         assert list_checks()  # still returns normal checks
 
     def test_empty_config_clears_overrides(self):
-        configure_checks({"squad_topic": {"excluded": ["canonical/some-repo"]}})
+        configure_checks({"github2jira": {"excluded": ["canonical/some-repo"]}})
         configure_checks({})
         from repolint.checks._base import _checks_overrides
 

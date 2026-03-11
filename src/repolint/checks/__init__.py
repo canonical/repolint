@@ -14,11 +14,10 @@ from repolint.checks import (  # noqa: F401
     contains_charm,
     contains_k8s_charm,
     github2jira,
+    github_topics,
     jubilant,
     juju4,
     ops_testing,
-    product_topic,
-    squad_topic,
     tf_v1,
 )
 from repolint.checks._base import (

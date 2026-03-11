@@ -52,6 +52,14 @@ def _validate_checks(data: dict, config_path: Path) -> None:
         excluded = check_cfg.get("excluded", [])
         if not isinstance(excluded, list):
             raise ValueError(f"'checks.{check_name}.excluded' in {config_path} must be a list.")
+        patterns = check_cfg.get("patterns", [])
+        if not isinstance(patterns, list):
+            raise ValueError(f"'checks.{check_name}.patterns' in {config_path} must be a list.")
+        for i, p in enumerate(patterns):
+            if not isinstance(p, str):
+                raise ValueError(
+                    f"'checks.{check_name}.patterns[{i}]' in {config_path} must be a string."
+                )
 
 
 def load_config(config_path: Path) -> dict:
@@ -66,12 +74,16 @@ def load_config(config_path: Path) -> dict:
     :func:`resolve_repositories`.
 
     An optional ``checks`` key may provide per-check configuration, e.g. to
-    add extra exclusions::
+    configure topic patterns or add extra exclusions::
 
         checks:
-          squad_topic:
+          github_topics:
+            patterns:
+              - "^squad-"
+              - "^product-"
+          github2jira:
             excluded:
-              - canonical/cbartz-runner-testing
+              - canonical/some-repo
     """
     try:
         with config_path.open() as fh:

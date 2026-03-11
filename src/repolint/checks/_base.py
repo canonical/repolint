@@ -20,10 +20,16 @@ def configure_checks(checks_config: dict[str, dict]) -> None:
     """Set per-check configuration sourced from the repolint.yaml ``checks`` key.
 
     *checks_config* is expected to be a mapping of check name → check options.
-    Currently only ``excluded`` (a list of ``org/repo`` strings) is supported::
+    Supported options:
+
+    - ``excluded``: a list of ``org/repo`` strings to skip for that check.
+    - ``patterns``: (``github_topics`` only) a list of regexp strings; at
+      least one repository topic must match each pattern.
+
+    Example::
 
         {
-            "squad_topic": {"excluded": ["canonical/cbartz-runner-testing"]},
+            "github_topics": {"patterns": ["^squad-", "^product-"]},
             "github2jira": {"excluded": ["canonical/gatekeeper-repo-test"]},
         }
 
@@ -31,6 +37,11 @@ def configure_checks(checks_config: dict[str, dict]) -> None:
     """
     global _checks_overrides
     _checks_overrides = checks_config
+
+
+def get_check_config(name: str) -> dict:
+    """Return the configuration dict for the named check, or an empty dict."""
+    return _checks_overrides.get(name, {})
 
 
 @dataclass
