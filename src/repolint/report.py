@@ -5,21 +5,40 @@
 
 from datetime import datetime
 
-from repolint.checks import CheckResult, get_check, list_checks
+from repolint.checks import CheckResult, list_checks
 from repolint.utils import get_repository_details_filename, sanitize
 
 
 def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
-    """Render a detailed per-repository compliance report as Markdown."""
+    """Render a detailed per-repository compliance report as a nested Markdown list.
+
+    Structure: one top-level bullet per ParentCheck, with its leaf checks
+    indented beneath it.  Internal helper checks (parent='_internal') are
+    omitted as they are implementation details, not user-facing criteria.
+    """
     markdown = f"# {repo}\n\n"
-    for criterion_name, value in results.items():
-        check = get_check(criterion_name)
-        if check is None:
+    for parent in [c for c in list_checks() if not c.parent]:
+        parent_result = results.get(parent.name)
+        if parent_result is None:
             continue
-        description = sanitize(check.description)
-        markdown += f"- <span title='{description}'>{criterion_name}</span>: {value.result}\n"
-        if value.message:
-            markdown += f"  - {value.message}\n"
+        parent_desc = sanitize(parent.description)
+        line = f"- <span title='{parent_desc}'>{parent.name}</span>: {parent_result.result}"
+        if parent_result.message:
+            line += f" — {parent_result.message}"
+        markdown += line + "\n"
+
+        for child in [c for c in list_checks() if c.parent == parent.name]:
+            child_result = results.get(child.name)
+            if child_result is None:
+                continue
+            child_desc = sanitize(child.description)
+            child_line = (
+                f"  - <span title='{child_desc}'>{child.name}</span>: {child_result.result}"
+            )
+            if child_result.message:
+                child_line += f" — {child_result.message}"
+            markdown += child_line + "\n"
+
         markdown += "\n"
     return markdown
 

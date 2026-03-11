@@ -29,34 +29,66 @@ def _mock_check(name, description="desc", parent=""):
 
 class TestRenderMarkdownDetails:
     def test_includes_repo_name_as_heading(self):
-        results = {
-            "github_topics": CheckResult(CheckStatus.COMPLIANT, ""),
-        }
-        md = render_markdown_details("canonical/my-charm", results)
+        md = render_markdown_details("canonical/my-charm", {})
         assert "# canonical/my-charm" in md
 
-    def test_includes_criterion_name_and_result(self):
-        results = {
-            "github_topics": CheckResult(CheckStatus.COMPLIANT, ""),
-        }
-        md = render_markdown_details("canonical/my-charm", results)
+    def test_shows_parent_and_child_checks(self):
+        with patch("repolint.report.list_checks") as mock_lc:
+            mock_lc.return_value = [
+                _mock_check("github_topics", parent="github"),
+                _mock_check("github", parent=""),
+            ]
+            results = {
+                "github": CheckResult(CheckStatus.COMPLIANT, "All subchecks are compliant."),
+                "github_topics": CheckResult(CheckStatus.COMPLIANT, ""),
+            }
+            md = render_markdown_details("canonical/my-charm", results)
+        assert "github" in md
         assert "github_topics" in md
         assert CheckStatus.COMPLIANT in md
 
-    def test_includes_message_when_present(self):
-        results = {
-            "github_topics": CheckResult(CheckStatus.NOT_COMPLIANT, "No topic matches pattern"),
-        }
-        md = render_markdown_details("canonical/my-charm", results)
-        assert "No topic matches pattern" in md
+    def test_leaf_check_nested_under_parent(self):
+        with patch("repolint.report.list_checks") as mock_lc:
+            mock_lc.return_value = [
+                _mock_check("github_topics", parent="github"),
+                _mock_check("github", parent=""),
+            ]
+            results = {
+                "github": CheckResult(CheckStatus.COMPLIANT, ""),
+                "github_topics": CheckResult(
+                    CheckStatus.NOT_COMPLIANT, "No topic matches pattern."
+                ),
+            }
+            md = render_markdown_details("canonical/my-charm", results)
+        lines = md.splitlines()
+        github_line = next(
+            i for i, ln in enumerate(lines) if "github" in ln and "github_topics" not in ln
+        )
+        topics_line = next(i for i, ln in enumerate(lines) if "github_topics" in ln)
+        assert topics_line > github_line
+        assert lines[topics_line].startswith("  "), "Child check should be indented"
+        assert "No topic matches pattern." in md
 
-    def test_skips_unknown_criterion(self):
-        results = {
-            "unknown_criterion_xyz": CheckResult(CheckStatus.COMPLIANT, ""),
-        }
+    def test_message_appended_inline(self):
+        with patch("repolint.report.list_checks") as mock_lc:
+            mock_lc.return_value = [
+                _mock_check("github_topics", parent="github"),
+                _mock_check("github", parent=""),
+            ]
+            results = {
+                "github": CheckResult(CheckStatus.NOT_COMPLIANT, "Subcheck(s) failing."),
+                "github_topics": CheckResult(CheckStatus.NOT_COMPLIANT, "No topic matches."),
+            }
+            md = render_markdown_details("canonical/my-charm", results)
+        assert "Subcheck(s) failing." in md
+        assert "No topic matches." in md
+
+    def test_unknown_criterion_in_results_ignored(self):
+        """Entries in results that are not in list_checks() are simply not rendered."""
+        results = {"unknown_criterion_xyz": CheckResult(CheckStatus.COMPLIANT, "")}
         md = render_markdown_details("canonical/my-charm", results)
-        # Should not raise and should still produce heading
         assert "# canonical/my-charm" in md
+        assert "unknown_criterion_xyz" not in md
 
 
 # ---------------------------------------------------------------------------
