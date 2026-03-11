@@ -13,10 +13,11 @@ uv sync --all-groups
 ## Running checks
 
 ```bash
-tox -e fmt       # auto-format with ruff
-tox -e lint      # codespell + ruff + mypy
-tox -e unit      # pytest + coverage
-tox -e static    # bandit (medium+ severity)
+tox -e fmt          # auto-format with ruff
+tox -e lint         # codespell + ruff + mypy
+tox -e unit         # pytest + coverage (no network required)
+tox -e static       # bandit (medium+ severity)
+tox -e integration  # CLI integration tests (requires gh auth and network)
 ```
 
 > **Note:** The `tox.toml` file requires tox ≥ 4.21 with the

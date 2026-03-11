@@ -58,6 +58,9 @@ coverage-report = [
 static = [
   "bandit[toml]",
 ]
+integration = [
+  "pytest",
+]
 
 # ---------------------------------------------------------------------------
 # Ruff
@@ -195,6 +198,12 @@ description = Run static analysis checks
 deps = bandit[toml]
 commands =
     bandit -c {toxinidir}/pyproject.toml -r {toxinidir}/src {toxinidir}/tests -ll
+
+[testenv:integration]
+description = Run integration tests (requires gh CLI authenticated and network access)
+deps = pytest
+commands =
+    pytest {toxinidir}/tests/integration -v --tb native -s {posargs}
 """
 
 # ---------------------------------------------------------------------------

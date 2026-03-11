@@ -72,6 +72,18 @@ description = "Run static analysis checks"
 commands = [["bandit", "-c", "{toxinidir}/pyproject.toml", "-r", "{[vars]src_path}", "{[vars]tst_path}", "-ll"]]
 dependency_groups = ["static"]
 
+[env.integration]
+description = "Run integration tests (requires gh CLI authenticated and network access)"
+commands = [
+  [
+    "pytest",
+    "{[vars]tst_path}integration",
+    "-v", "--tb", "native", "-s",
+    {replace = "posargs", extend = "true"},
+  ],
+]
+dependency_groups = ["integration"]
+
 [vars]
 src_path = "{toxinidir}/src/"
 tst_path = "{toxinidir}/tests/"
