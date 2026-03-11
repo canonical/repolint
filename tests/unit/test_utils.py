@@ -11,9 +11,56 @@ from repolint.utils import (
     find_regexp_in_path,
     get_repository_details_filename,
     get_repository_slug,
+    load_config,
     load_repositories,
     sanitize,
 )
+
+
+class TestLoadConfig:
+    def test_loads_repositories(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repositories:\n  - canonical/charm-a\n")
+        result = load_config(config)
+        assert result["repositories"] == ["canonical/charm-a"]
+
+    def test_loads_checks_section(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "checks:\n  pfe_topic:\n    excluded:\n      - canonical/cbartz-runner-testing\n"
+        )
+        result = load_config(config)
+        assert result["checks"]["pfe_topic"]["excluded"] == ["canonical/cbartz-runner-testing"]
+
+    def test_checks_section_is_optional(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repositories:\n  - canonical/charm-a\n")
+        result = load_config(config)
+        assert result.get("checks", {}) == {}
+
+    def test_raises_when_checks_not_a_mapping(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repositories:\n  - canonical/charm-a\nchecks: not-a-dict\n")
+        with pytest.raises(ValueError, match="checks"):
+            load_config(config)
+
+    def test_raises_when_check_config_not_a_mapping(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\nchecks:\n  pfe_topic: not-a-dict\n"
+        )
+        with pytest.raises(ValueError, match="pfe_topic"):
+            load_config(config)
+
+    def test_raises_when_excluded_not_a_list(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "checks:\n  pfe_topic:\n    excluded: canonical/bad\n"
+        )
+        with pytest.raises(ValueError, match="excluded"):
+            load_config(config)
 
 
 class TestLoadRepositories:

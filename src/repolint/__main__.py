@@ -9,12 +9,13 @@ import sys
 from pathlib import Path
 
 from repolint.config import DEFAULT_CONFIG_FILE, REPORTS_PATH
+from repolint.criteria import configure_checks
 from repolint.report import (
     analyze,
     render_markdown_details,
     render_markdown_overview,
 )
-from repolint.utils import get_repository_details_filename, load_repositories
+from repolint.utils import get_repository_details_filename, load_config
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -39,9 +40,12 @@ def main() -> None:
     config_path: Path = args.config
 
     try:
-        repositories = load_repositories(config_path)
+        config = load_config(config_path)
     except (FileNotFoundError, ValueError) as exc:
         parser.error(str(exc))
+
+    configure_checks(config.get("checks", {}))
+    repositories = config["repositories"]
 
     REPORTS_PATH.mkdir(exist_ok=True)
 

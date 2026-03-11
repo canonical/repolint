@@ -3,9 +3,31 @@
 
 """Criteria definitions for repository compliance checks."""
 
+# Per-check configuration loaded from repolint.yaml.  Populated by
+# configure_checks() which is called from the CLI entry point before any
+# analysis runs.
+_checks_overrides: dict[str, dict] = {}
+
+
+def configure_checks(checks_config: dict[str, dict]) -> None:
+    """Set per-check configuration sourced from the repolint.yaml ``checks`` key.
+
+    *checks_config* is expected to be a mapping of check name → check options.
+    Currently only ``excluded`` (a list of ``org/repo`` strings) is supported::
+
+        {
+            "pfe_topic": {"excluded": ["canonical/cbartz-runner-testing"]},
+            "github2jira": {"excluded": ["canonical/gatekeeper-repo-test"]},
+        }
+
+    Calling this function again replaces any previously configured overrides.
+    """
+    global _checks_overrides
+    _checks_overrides = checks_config
+
 
 def list_criteria() -> list[dict]:
-    """List criteria to check against.
+    """List criteria to check against, with exclusions merged from the loaded config.
 
     Format:
     - name: name of the criterion (must match the Check subclass name attribute)
@@ -15,13 +37,14 @@ def list_criteria() -> list[dict]:
     - aggregates: list of criteria names that this criterion aggregates (should appear before
                   in the list). The check automatically fails if any aggregated checks fail, and
                   passes if all aggregated checks pass.
-    - excluded: list of repositories (full names) to exclude from this criterion
+    - excluded: list of repositories (full names) to exclude from this criterion.
+                Merged with any exclusions provided via configure_checks().
     - hidden: if True, the criterion is not shown in the overview report
 
     Note: descriptions live in each Check subclass (leaf checks) or are passed
     to AggregateCheck at construction time.
     """
-    return [
+    base: list[dict] = [
         {
             "name": "pfe_topic",
             "excluded": ["canonical/cbartz-runner-testing", "wazuh-dev"],
@@ -107,6 +130,19 @@ def list_criteria() -> list[dict]:
             "aggregates": ["tf_v1"],
         },
     ]
+    if not _checks_overrides:
+        return base
+    merged: list[dict] = []
+    for criterion in base:
+        override = _checks_overrides.get(criterion["name"], {})
+        config_excluded: list[str] = override.get("excluded", [])
+        if config_excluded:
+            criterion = dict(criterion)  # shallow copy to avoid mutating the literal
+            criterion["excluded"] = list(
+                dict.fromkeys(criterion.get("excluded", []) + config_excluded)
+            )
+        merged.append(criterion)
+    return merged
 
 
 def get_criterion_by_name(name: str) -> dict | None:

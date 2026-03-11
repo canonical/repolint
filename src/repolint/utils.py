@@ -28,15 +28,25 @@ def get_repository_details_filename(repo: str) -> str:
     return f"quality-{get_repository_slug(repo)}-details.md"
 
 
-def load_repositories(config_path: Path) -> list[str]:
-    """Load the list of repositories from a repolint YAML config file.
+def load_config(config_path: Path) -> dict:
+    """Load and validate a repolint YAML config file, returning the parsed dict.
 
-    The config file must contain a top-level ``repositories`` key whose value
-    is a list of strings in ``org/repo`` format::
+    The config file must contain at least a top-level ``repositories`` key::
 
         repositories:
           - canonical/my-charm
           - canonical/another-charm
+
+    An optional ``checks`` key may provide per-check configuration, e.g. to
+    add extra exclusions::
+
+        checks:
+          pfe_topic:
+            excluded:
+              - canonical/cbartz-runner-testing
+          github2jira:
+            excluded:
+              - canonical/gatekeeper-repo-test
     """
     try:
         with config_path.open() as fh:
@@ -56,7 +66,24 @@ def load_repositories(config_path: Path) -> list[str]:
         raise ValueError(
             f"Invalid repository entries in {config_path} (expected 'org/repo'): {invalid}"
         )
-    return repos
+    checks = data.get("checks", {})
+    if not isinstance(checks, dict):
+        raise ValueError(f"'checks' in {config_path} must be a mapping.")
+    for check_name, check_cfg in checks.items():
+        if not isinstance(check_cfg, dict):
+            raise ValueError(f"'checks.{check_name}' in {config_path} must be a mapping.")
+        excluded = check_cfg.get("excluded", [])
+        if not isinstance(excluded, list):
+            raise ValueError(f"'checks.{check_name}.excluded' in {config_path} must be a list.")
+    return data
+
+
+def load_repositories(config_path: Path) -> list[str]:
+    """Load the list of repositories from a repolint YAML config file.
+
+    See :func:`load_config` for the full config format.
+    """
+    return load_config(config_path)["repositories"]
 
 
 @lru_cache(maxsize=200)
