@@ -114,9 +114,9 @@ def search_repositories_by_query(query: str) -> list[str]:
         *query.split(),
         "archived:false",
         "--json",
-        "nameWithOwner",
+        "fullName",
         "--jq",
-        ".[].nameWithOwner",
+        ".[].fullName",
         "--limit",
         "1000",
     ]

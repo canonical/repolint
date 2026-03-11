@@ -85,7 +85,8 @@ def main() -> None:
     try:
         repositories = resolve_repositories(config, extra_query=args.query)
     except subprocess.CalledProcessError as exc:
-        parser.error(f"Failed to resolve repositories: {exc}")
+        stderr = exc.stderr.strip() if exc.stderr else "(no output)"
+        parser.error(f"Repository query failed: {stderr}")
         return  # unreachable; satisfies type checkers
 
     reports_dir.mkdir(parents=True, exist_ok=True)
