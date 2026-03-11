@@ -40,8 +40,8 @@ src/repolint/
 ├── checks/
 │   ├── _base.py           # Check ABC, AggregateCheck, CheckResult, registry helpers
 │   ├── __init__.py        # Triggers registration; defines AggregateCheck instances
-│   ├── pfe_topic.py       # One file per leaf check
 │   ├── squad_topic.py
+│   ├── product_topic.py
 │   └── ...
 ├── config.py              # CheckStatus enum and path/directory constants
 ├── report.py              # Report rendering and analysis orchestration
@@ -61,7 +61,6 @@ automatically registers a singleton instance in the global `_REGISTRY` via
 
 ```
 Check (ABC)
-├── PfeTopicCheck        name = "pfe_topic"
 ├── SquadTopicCheck      name = "squad_topic"
 ├── ...
 └── AggregateCheck       name set via constructor — self-registers on __init__

@@ -14,7 +14,6 @@ class SquadTopicCheck(Check):
     """Check that the repository has a squad-xxx topic."""
 
     name = "squad_topic"
-    depends_on = ["pfe_topic"]  # noqa: RUF012
     hidden = True
     description = (
         "Repository has a squad-xxx topic. To fix it, add the topic via canonical-repo-automation."

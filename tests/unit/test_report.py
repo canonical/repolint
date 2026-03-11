@@ -32,22 +32,22 @@ def _mock_check(name, description="desc", hidden=False, aggregates=None):
 class TestRenderMarkdownDetails:
     def test_includes_repo_name_as_heading(self):
         results = {
-            "pfe_topic": CheckResult(CheckStatus.COMPLIANT, ""),
+            "squad_topic": CheckResult(CheckStatus.COMPLIANT, ""),
         }
         md = render_markdown_details("canonical/my-charm", results)
         assert "# canonical/my-charm" in md
 
     def test_includes_criterion_name_and_result(self):
         results = {
-            "pfe_topic": CheckResult(CheckStatus.COMPLIANT, ""),
+            "squad_topic": CheckResult(CheckStatus.COMPLIANT, ""),
         }
         md = render_markdown_details("canonical/my-charm", results)
-        assert "pfe_topic" in md
+        assert "squad_topic" in md
         assert CheckStatus.COMPLIANT in md
 
     def test_includes_message_when_present(self):
         results = {
-            "pfe_topic": CheckResult(CheckStatus.NOT_COMPLIANT, "No topic found."),
+            "squad_topic": CheckResult(CheckStatus.NOT_COMPLIANT, "No topic found."),
         }
         md = render_markdown_details("canonical/my-charm", results)
         assert "No topic found." in md

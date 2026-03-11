@@ -17,7 +17,6 @@ from repolint.checks import (  # noqa: F401
     jubilant,
     juju4,
     ops_testing,
-    pfe_topic,
     product_topic,
     squad_topic,
     tf_v1,
@@ -36,8 +35,7 @@ from repolint.config import CheckStatus
 AggregateCheck(
     "github",
     description="Repository matches all our GitHub best practices (topics, GitHub to Jira integration).",
-    depends_on=["pfe_topic"],
-    aggregates=["pfe_topic", "squad_topic", "product_topic", "github2jira"],
+    aggregates=["squad_topic", "product_topic", "github2jira"],
 )
 AggregateCheck(
     "unit_tests",

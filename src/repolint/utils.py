@@ -69,7 +69,7 @@ def load_config(config_path: Path) -> dict:
     add extra exclusions::
 
         checks:
-          pfe_topic:
+          squad_topic:
             excluded:
               - canonical/cbartz-runner-testing
     """

@@ -12,7 +12,6 @@ class Github2JiraCheck(Check):
     """Check that the repository has a GitHub-to-Jira sync configuration."""
 
     name = "github2jira"
-    depends_on = ["pfe_topic"]  # noqa: RUF012
     hidden = True
     description = "Repository has GitHub to Jira integration set up. To fix it, add .github/.jira_sync_config.yaml."
 

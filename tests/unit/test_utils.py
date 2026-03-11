@@ -48,10 +48,10 @@ class TestLoadConfig:
         config = tmp_path / "repolint.yaml"
         config.write_text(
             "repositories:\n  - canonical/charm-a\n"
-            "checks:\n  pfe_topic:\n    excluded:\n      - canonical/cbartz-runner-testing\n"
+            "checks:\n  squad_topic:\n    excluded:\n      - canonical/cbartz-runner-testing\n"
         )
         result = load_config(config)
-        assert result["checks"]["pfe_topic"]["excluded"] == ["canonical/cbartz-runner-testing"]
+        assert result["checks"]["squad_topic"]["excluded"] == ["canonical/cbartz-runner-testing"]
 
     def test_checks_section_is_optional(self, tmp_path):
         config = tmp_path / "repolint.yaml"
@@ -86,16 +86,16 @@ class TestLoadConfig:
     def test_raises_when_check_config_not_a_mapping(self, tmp_path):
         config = tmp_path / "repolint.yaml"
         config.write_text(
-            "repositories:\n  - canonical/charm-a\nchecks:\n  pfe_topic: not-a-dict\n"
+            "repositories:\n  - canonical/charm-a\nchecks:\n  squad_topic: not-a-dict\n"
         )
-        with pytest.raises(ValueError, match="pfe_topic"):
+        with pytest.raises(ValueError, match="squad_topic"):
             load_config(config)
 
     def test_raises_when_excluded_not_a_list(self, tmp_path):
         config = tmp_path / "repolint.yaml"
         config.write_text(
             "repositories:\n  - canonical/charm-a\n"
-            "checks:\n  pfe_topic:\n    excluded: canonical/bad\n"
+            "checks:\n  squad_topic:\n    excluded: canonical/bad\n"
         )
         with pytest.raises(ValueError, match="excluded"):
             load_config(config)

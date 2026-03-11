@@ -150,7 +150,7 @@ class TestCheckDescription:
 
 class TestGetCheckFunction:
     def test_known_check_is_registered(self):
-        instance = get_check("pfe_topic")
+        instance = get_check("squad_topic")
         assert instance is not None
         assert callable(instance)
         assert isinstance(instance, Check)
@@ -221,34 +221,34 @@ class TestConfigureChecks:
         configure_checks({})
 
     def test_configure_sets_exclusions(self):
-        configure_checks({"pfe_topic": {"excluded": ["canonical/extra-repo"]}})
-        check = get_check("pfe_topic")
+        configure_checks({"squad_topic": {"excluded": ["canonical/extra-repo"]}})
+        check = get_check("squad_topic")
         assert check is not None
         result = check("canonical/extra-repo")
         assert result.result == CheckStatus.NOT_ELIGIBLE
 
     def test_configure_non_excluded_repo_runs(self):
-        configure_checks({"pfe_topic": {"excluded": ["canonical/excluded-repo"]}})
-        check = get_check("pfe_topic")
+        configure_checks({"squad_topic": {"excluded": ["canonical/excluded-repo"]}})
+        check = get_check("squad_topic")
         assert check is not None
         # "canonical/allowed-repo" is not excluded — check should run (not return NOT_ELIGIBLE
         # due to exclusion); actual result depends on the repo content, but it won't be
         # excluded.
         from repolint.checks._base import _checks_overrides
 
-        assert "canonical/excluded-repo" in _checks_overrides.get("pfe_topic", {}).get(
+        assert "canonical/excluded-repo" in _checks_overrides.get("squad_topic", {}).get(
             "excluded", []
         )
-        assert "canonical/allowed-repo" not in _checks_overrides.get("pfe_topic", {}).get(
+        assert "canonical/allowed-repo" not in _checks_overrides.get("squad_topic", {}).get(
             "excluded", []
         )
 
     def test_configure_replaces_previous_overrides(self):
-        configure_checks({"pfe_topic": {"excluded": ["canonical/first-repo"]}})
-        configure_checks({"pfe_topic": {"excluded": ["canonical/second-repo"]}})
+        configure_checks({"squad_topic": {"excluded": ["canonical/first-repo"]}})
+        configure_checks({"squad_topic": {"excluded": ["canonical/second-repo"]}})
         from repolint.checks._base import _checks_overrides
 
-        excluded = _checks_overrides.get("pfe_topic", {}).get("excluded", [])
+        excluded = _checks_overrides.get("squad_topic", {}).get("excluded", [])
         assert "canonical/second-repo" in excluded
         assert "canonical/first-repo" not in excluded
 
@@ -257,7 +257,7 @@ class TestConfigureChecks:
         assert list_checks()  # still returns normal checks
 
     def test_empty_config_clears_overrides(self):
-        configure_checks({"pfe_topic": {"excluded": ["canonical/some-repo"]}})
+        configure_checks({"squad_topic": {"excluded": ["canonical/some-repo"]}})
         configure_checks({})
         from repolint.checks._base import _checks_overrides
 

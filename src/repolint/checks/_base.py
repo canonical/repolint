@@ -23,7 +23,7 @@ def configure_checks(checks_config: dict[str, dict]) -> None:
     Currently only ``excluded`` (a list of ``org/repo`` strings) is supported::
 
         {
-            "pfe_topic": {"excluded": ["canonical/cbartz-runner-testing"]},
+            "squad_topic": {"excluded": ["canonical/cbartz-runner-testing"]},
             "github2jira": {"excluded": ["canonical/gatekeeper-repo-test"]},
         }
 

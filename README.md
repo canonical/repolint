@@ -1,6 +1,6 @@
 # repolint
 
-A repository compliance dashboard for Canonical Platform Engineering.
+A repository compliance dashboard.
 
 `repolint` analyses GitHub repositories against a set of engineering standards and
 produces Markdown and JSON reports showing which repositories are compliant, which
@@ -24,6 +24,49 @@ Or with pip:
 ```bash
 pip install git+https://github.com/canonical/repolint
 ```
+
+## Usage
+
+```bash
+repolint [--config PATH]
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--config PATH` | `repolint.yaml` | Path to the YAML configuration file. Optional when `--query` is used. |
+| `--query QUERY` | _(none)_ | GitHub search query; results merged with config repositories. Archived repos are excluded automatically. |
+| `--output NAME` | `quality` | Base name for the summary reports: `NAME.json` and `NAME.md`. Per-repository detail files are always named `<org>-<repo>-details.md`. |
+| `--output-dir DIR` | `reports` | Directory where all report files are written. Created if it does not exist. |
+
+### Examples
+
+```bash
+# Pass a GitHub search query directly — no config file needed
+repolint --query "org:canonical topic:platform-engineering topic:squad-emea"
+
+# Analyse repositories listed in repolint.yaml (current directory)
+repolint
+
+# Use a custom configuration file
+repolint --config ~/my-repos.yaml
+
+# Use a config file in another directory
+repolint --config /path/to/project/repolint.yaml
+
+# Combine a query with a config file (results merged, duplicates removed)
+repolint --config ~/my-repos.yaml --query "org:canonical topic:platform-engineering"
+```
+
+### Output
+
+Reports are written to a `reports/` directory in the working directory:
+
+| File | Contents |
+| --- | --- |
+| `reports/quality.md` | Markdown table — one row per repository, one column per visible check |
+| `reports/quality.json` | Raw JSON results for all checks |
+
+> **Tip:** Preview Markdown locally with `pip install grip && grip reports/quality.md`
 
 ## Configuration
 
@@ -72,56 +115,13 @@ repositories:
   - canonical/my-charm
 
 checks:
-  pfe_topic:
+  squad_topic:
     excluded:
-      - canonical/my-charm   # this repo doesn't need the pfe topic
+      - canonical/my-charm   # this repo doesn't need a squad topic
   github2jira:
     excluded:
       - canonical/my-charm   # no Jira integration required
 ```
-
-## Usage
-
-```bash
-repolint [--config PATH]
-```
-
-| Option | Default | Description |
-|---|---|---|
-| `--config PATH` | `repolint.yaml` | Path to the YAML configuration file. Optional when `--query` is used. |
-| `--query QUERY` | _(none)_ | GitHub search query; results merged with config repositories. Archived repos are excluded automatically. |
-| `--output NAME` | `quality` | Base name for the summary reports: `NAME.json` and `NAME.md`. Per-repository detail files are always named `<org>-<repo>-details.md`. |
-| `--output-dir DIR` | `reports` | Directory where all report files are written. Created if it does not exist. |
-
-### Examples
-
-```bash
-# Analyse repositories listed in repolint.yaml (current directory)
-repolint
-
-# Use a custom configuration file
-repolint --config ~/my-repos.yaml
-
-# Use a config file in another directory
-repolint --config /path/to/project/repolint.yaml
-
-# Pass a GitHub search query directly — no config file needed
-repolint --query "org:canonical topic:platform-engineering topic:squad-emea"
-
-# Combine a query with a config file (results merged, duplicates removed)
-repolint --config ~/my-repos.yaml --query "org:canonical topic:platform-engineering"
-```
-
-### Output
-
-Reports are written to a `reports/` directory in the working directory:
-
-| File | Contents |
-|---|---|
-| `reports/quality.md` | Markdown table — one row per repository, one column per visible check |
-| `reports/quality.json` | Raw JSON results for all checks |
-
-> **Tip:** Preview Markdown locally with `pip install grip && grip reports/quality.md`
 
 ## Checks
 
@@ -132,7 +132,7 @@ checks for repositories that have not been analysed yet.
 ### Aggregate checks (shown in the overview table)
 
 | Check | Description |
-|---|---|
+| --- | --- |
 | `github` | Repository matches all GitHub best practices (topics + Jira integration) |
 | `charmlibs` | Repository uses charmlibs instead of `operator_libs_linux` |
 | `unit_tests` | Repository follows unit testing best practices (no Harness) |
@@ -142,8 +142,7 @@ checks for repositories that have not been analysed yet.
 ### Sub-checks (hidden in the overview, visible in per-repository detail reports)
 
 | Check | Description |
-|---|---|
-| `pfe_topic` | Repository has the `platform-engineering` GitHub topic |
+| --- | --- |
 | `squad_topic` | Repository has a `squad-*` GitHub topic |
 | `product_topic` | Repository has a `product-*` GitHub topic |
 | `github2jira` | `.github/.jira_sync_config.yaml` is present |
@@ -158,7 +157,7 @@ checks for repositories that have not been analysed yet.
 ### Check result symbols
 
 | Symbol | Meaning |
-|---|---|
+| --- | --- |
 | ✅ | Compliant |
 | ❌ | Not compliant |
 | n/a | Not eligible (dependency not met, or repository explicitly excluded) |
