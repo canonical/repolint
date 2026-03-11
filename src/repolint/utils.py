@@ -28,37 +28,8 @@ def get_repository_details_filename(repo: str) -> str:
     return f"quality-{get_repository_slug(repo)}-details.md"
 
 
-def load_config(config_path: Path) -> dict:
-    """Load and validate a repolint YAML config file, returning the parsed dict.
-
-    The config file must contain at least a top-level ``repositories`` key::
-
-        repositories:
-          - canonical/my-charm
-          - canonical/another-charm
-
-    An optional ``checks`` key may provide per-check configuration, e.g. to
-    add extra exclusions::
-
-        checks:
-          pfe_topic:
-            excluded:
-              - canonical/cbartz-runner-testing
-          github2jira:
-            excluded:
-              - canonical/gatekeeper-repo-test
-    """
-    try:
-        with config_path.open() as fh:
-            data = yaml.safe_load(fh)
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            f"Config file not found: {config_path}. "
-            "Create a repolint.yaml with a 'repositories' list."
-        )
-    if not isinstance(data, dict) or "repositories" not in data:
-        raise ValueError(f"Config file {config_path} must contain a top-level 'repositories' key.")
-    repos = data["repositories"]
+def _validate_repositories(data: dict, config_path: Path) -> None:
+    repos = data.get("repositories", [])
     if not isinstance(repos, list):
         raise ValueError(f"'repositories' in {config_path} must be a list.")
     invalid = [r for r in repos if not isinstance(r, str) or "/" not in r]
@@ -66,6 +37,12 @@ def load_config(config_path: Path) -> dict:
         raise ValueError(
             f"Invalid repository entries in {config_path} (expected 'org/repo'): {invalid}"
         )
+    query = data.get("repository_query")
+    if query is not None and not isinstance(query, str):
+        raise ValueError(f"'repository_query' in {config_path} must be a string.")
+
+
+def _validate_checks(data: dict, config_path: Path) -> None:
     checks = data.get("checks", {})
     if not isinstance(checks, dict):
         raise ValueError(f"'checks' in {config_path} must be a mapping.")
@@ -75,15 +52,91 @@ def load_config(config_path: Path) -> dict:
         excluded = check_cfg.get("excluded", [])
         if not isinstance(excluded, list):
             raise ValueError(f"'checks.{check_name}.excluded' in {config_path} must be a list.")
+
+
+def load_config(config_path: Path) -> dict:
+    """Load and validate a repolint YAML config file, returning the parsed dict.
+
+    The config file must contain at least one of:
+
+    - a ``repositories`` key with a list of ``org/repo`` strings, or
+    - a ``repository_query`` key with a GitHub search query string.
+
+    Both keys may be present; their results are merged by
+    :func:`resolve_repositories`.
+
+    An optional ``checks`` key may provide per-check configuration, e.g. to
+    add extra exclusions::
+
+        checks:
+          pfe_topic:
+            excluded:
+              - canonical/cbartz-runner-testing
+    """
+    try:
+        with config_path.open() as fh:
+            data = yaml.safe_load(fh)
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"Config file not found: {config_path}. "
+            "Create a repolint.yaml with a 'repositories' list or 'repository_query'."
+        )
+    if not isinstance(data, dict):
+        raise ValueError(f"Config file {config_path} must be a YAML mapping.")
+    if "repositories" not in data and "repository_query" not in data:
+        raise ValueError(
+            f"Config file {config_path} must contain at least one of "
+            "'repositories' or 'repository_query'."
+        )
+    _validate_repositories(data, config_path)
+    _validate_checks(data, config_path)
     return data
 
 
-def load_repositories(config_path: Path) -> list[str]:
-    """Load the list of repositories from a repolint YAML config file.
+def search_repositories_by_query(query: str) -> list[str]:
+    """Search GitHub for repositories matching *query* and return ``org/repo`` names.
 
-    See :func:`load_config` for the full config format.
+    *query* is a GitHub repository search query string, for example::
+
+        "org:canonical topic:platform-engineering topic:squad-emea"
+
+    The query string is split on whitespace; each token becomes a positional
+    argument to ``gh search repos``.  Results are returned in the order
+    GitHub returns them, deduplicated.
+
+    Raises :exc:`subprocess.CalledProcessError` if the ``gh`` CLI fails.
     """
-    return load_config(config_path)["repositories"]
+    cmd = [
+        "gh",
+        "search",
+        "repos",
+        *query.split(),
+        "--json",
+        "nameWithOwner",
+        "--jq",
+        ".[].nameWithOwner",
+        "--limit",
+        "1000",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    lines = result.stdout.strip().splitlines()
+    return list(dict.fromkeys(line for line in lines if line))
+
+
+def resolve_repositories(config: dict, extra_query: str | None = None) -> list[str]:
+    """Return the deduplicated list of repositories to analyse.
+
+    Sources, merged in this order (duplicates removed, preserving first occurrence):
+
+    1. ``config["repositories"]`` — static list from the config file.
+    2. Results of ``config["repository_query"]`` — if present.
+    3. Results of *extra_query* — if provided (e.g. from the CLI ``--query`` flag).
+    """
+    repos: list[str] = list(config.get("repositories", []))
+    for query in filter(None, [config.get("repository_query"), extra_query]):
+        repos.extend(search_repositories_by_query(query))
+    # Deduplicate while preserving order.
+    return list(dict.fromkeys(repos))
 
 
 @lru_cache(maxsize=200)

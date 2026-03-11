@@ -5,6 +5,7 @@
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from repolint.report import (
     render_markdown_details,
     render_markdown_overview,
 )
-from repolint.utils import get_repository_details_filename, load_config
+from repolint.utils import get_repository_details_filename, load_config, resolve_repositories
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -29,6 +30,16 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_CONFIG_FILE,
         help=f"Path to the repolint YAML config file (default: {DEFAULT_CONFIG_FILE}).",
+    )
+    parser.add_argument(
+        "--query",
+        metavar="QUERY",
+        default=None,
+        help=(
+            "GitHub repository search query whose results are merged with the "
+            "repositories from the config file, e.g. "
+            "'org:canonical topic:platform-engineering topic:squad-emea'."
+        ),
     )
     return parser
 
@@ -45,7 +56,12 @@ def main() -> None:
         parser.error(str(exc))
 
     configure_checks(config.get("checks", {}))
-    repositories = config["repositories"]
+
+    try:
+        repositories = resolve_repositories(config, extra_query=args.query)
+    except subprocess.CalledProcessError as exc:
+        parser.error(f"Failed to resolve repositories: {exc}")
+        return  # unreachable; satisfies type checkers
 
     REPORTS_PATH.mkdir(exist_ok=True)
 

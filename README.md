@@ -27,7 +27,10 @@ pip install git+https://github.com/canonical/repolint
 
 ## Configuration
 
-Create a `repolint.yaml` file **in the directory where you run the command**:
+Create a `repolint.yaml` file **in the directory where you run the command**.
+At least one of `repositories` or `repository_query` must be present.
+
+### Static repository list
 
 ```yaml
 repositories:
@@ -38,7 +41,26 @@ repositories:
 
 Each entry is a fully-qualified GitHub repository name in `org/repo` format.
 
-A different config file can be passed via the `--config` flag (see [Usage](#usage)).
+### Dynamic query
+
+```yaml
+repository_query: "org:canonical topic:platform-engineering topic:squad-emea"
+```
+
+The query is passed directly to `gh search repos`.  Results are merged with any
+repositories listed under `repositories`.
+
+Both keys can be used together; the final list is deduplicated while preserving
+order (static list first, then query results).
+
+### Combining both
+
+```yaml
+repositories:
+  - canonical/special-repo    # always included
+
+repository_query: "org:canonical topic:platform-engineering"
+```
 
 ### Excluding repositories from specific checks
 
@@ -66,6 +88,7 @@ repolint [--config PATH]
 | Option | Default | Description |
 |---|---|---|
 | `--config PATH` | `repolint.yaml` | Path to the YAML configuration file |
+| `--query QUERY` | _(none)_ | GitHub search query; results merged with config repositories |
 
 ### Examples
 
@@ -78,6 +101,12 @@ repolint --config ~/my-repos.yaml
 
 # Use a config file in another directory
 repolint --config /path/to/project/repolint.yaml
+
+# Pass a GitHub search query directly (merged with config repositories)
+repolint --query "org:canonical topic:platform-engineering topic:squad-emea"
+
+# Combine a query with a config file
+repolint --config ~/my-repos.yaml --query "org:canonical topic:platform-engineering"
 ```
 
 ### Output

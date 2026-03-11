@@ -47,7 +47,7 @@ src/repolint/
 ├── utils.py               # Shared helpers (clone, topic fetch, file search)
 └── __main__.py            # CLI entry point
 tests/unit/                # Unit tests (pytest)
-repolint.yaml              # Your repository list (not committed)
+repolint.yaml              # Your repository list and/or query (not committed)
 reports/                   # Generated reports (git-ignored)
 ```
 

@@ -3,6 +3,9 @@
 
 """Unit tests for repolint.utils."""
 
+import subprocess
+from unittest.mock import patch
+
 import pytest
 
 from repolint.utils import (
@@ -12,8 +15,9 @@ from repolint.utils import (
     get_repository_details_filename,
     get_repository_slug,
     load_config,
-    load_repositories,
+    resolve_repositories,
     sanitize,
+    search_repositories_by_query,
 )
 
 
@@ -23,6 +27,22 @@ class TestLoadConfig:
         config.write_text("repositories:\n  - canonical/charm-a\n")
         result = load_config(config)
         assert result["repositories"] == ["canonical/charm-a"]
+
+    def test_loads_repository_query(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repository_query: 'org:canonical topic:platform-engineering'\n")
+        result = load_config(config)
+        assert result["repository_query"] == "org:canonical topic:platform-engineering"
+
+    def test_repositories_and_query_can_coexist(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "repository_query: 'org:canonical topic:platform-engineering'\n"
+        )
+        result = load_config(config)
+        assert result["repositories"] == ["canonical/charm-a"]
+        assert "repository_query" in result
 
     def test_loads_checks_section(self, tmp_path):
         config = tmp_path / "repolint.yaml"
@@ -38,6 +58,24 @@ class TestLoadConfig:
         config.write_text("repositories:\n  - canonical/charm-a\n")
         result = load_config(config)
         assert result.get("checks", {}) == {}
+
+    def test_raises_when_neither_repositories_nor_query(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("something_else:\n  - canonical/charm-a\n")
+        with pytest.raises(ValueError, match="repositories"):
+            load_config(config)
+
+    def test_raises_when_repositories_not_a_list(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repositories: canonical/charm-a\n")
+        with pytest.raises(ValueError, match="list"):
+            load_config(config)
+
+    def test_raises_when_repository_query_not_a_string(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repository_query:\n  - not-a-string\n")
+        with pytest.raises(ValueError, match="repository_query"):
+            load_config(config)
 
     def test_raises_when_checks_not_a_mapping(self, tmp_path):
         config = tmp_path / "repolint.yaml"
@@ -63,39 +101,88 @@ class TestLoadConfig:
             load_config(config)
 
 
-class TestLoadRepositories:
-    def test_loads_valid_config(self, tmp_path):
-        config = tmp_path / "repolint.yaml"
-        config.write_text("repositories:\n  - canonical/charm-a\n  - canonical/charm-b\n")
-        result = load_repositories(config)
+class TestSearchRepositoriesByQuery:
+    def test_returns_repository_list(self):
+        mock_output = "canonical/charm-a\ncanonical/charm-b\n"
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.stdout = mock_output
+            result = search_repositories_by_query("org:canonical topic:platform-engineering")
         assert result == ["canonical/charm-a", "canonical/charm-b"]
 
-    def test_raises_file_not_found(self, tmp_path):
-        with pytest.raises(FileNotFoundError, match=r"repolint\.yaml"):
-            load_repositories(tmp_path / "repolint.yaml")
+    def test_passes_query_tokens_as_args(self):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.stdout = ""
+            search_repositories_by_query("org:canonical topic:x topic:y")
+        call_args = mock_run.call_args[0][0]
+        assert "org:canonical" in call_args
+        assert "topic:x" in call_args
+        assert "topic:y" in call_args
 
-    def test_raises_when_repositories_key_missing(self, tmp_path):
-        config = tmp_path / "repolint.yaml"
-        config.write_text("something_else:\n  - canonical/charm-a\n")
-        with pytest.raises(ValueError, match="repositories"):
-            load_repositories(config)
+    def test_deduplicates_results(self):
+        mock_output = "canonical/charm-a\ncanonical/charm-a\ncanonical/charm-b\n"
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.stdout = mock_output
+            result = search_repositories_by_query("org:canonical")
+        assert result == ["canonical/charm-a", "canonical/charm-b"]
 
-    def test_raises_when_repositories_not_a_list(self, tmp_path):
-        config = tmp_path / "repolint.yaml"
-        config.write_text("repositories: canonical/charm-a\n")
-        with pytest.raises(ValueError, match="list"):
-            load_repositories(config)
+    def test_empty_output_returns_empty_list(self):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.stdout = ""
+            result = search_repositories_by_query("org:canonical")
+        assert result == []
 
-    def test_raises_on_invalid_repo_format(self, tmp_path):
-        config = tmp_path / "repolint.yaml"
-        config.write_text("repositories:\n  - not-a-valid-repo\n")
-        with pytest.raises(ValueError, match="not-a-valid-repo"):
-            load_repositories(config)
+    def test_propagates_called_process_error(self):
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(1, "gh")
+            with pytest.raises(subprocess.CalledProcessError):
+                search_repositories_by_query("org:canonical")
 
-    def test_empty_repositories_list(self, tmp_path):
-        config = tmp_path / "repolint.yaml"
-        config.write_text("repositories: []\n")
-        assert load_repositories(config) == []
+
+class TestResolveRepositories:
+    def test_returns_config_repositories(self):
+        config = {"repositories": ["canonical/charm-a", "canonical/charm-b"]}
+        assert resolve_repositories(config) == ["canonical/charm-a", "canonical/charm-b"]
+
+    def test_merges_query_results(self):
+        config = {"repositories": ["canonical/charm-a"]}
+        with patch("repolint.utils.search_repositories_by_query") as mock_search:
+            mock_search.return_value = ["canonical/charm-b", "canonical/charm-c"]
+            result = resolve_repositories(config, extra_query="org:canonical")
+        assert result == ["canonical/charm-a", "canonical/charm-b", "canonical/charm-c"]
+
+    def test_merges_config_query_and_extra_query(self):
+        config = {
+            "repositories": ["canonical/charm-a"],
+            "repository_query": "org:canonical topic:x",
+        }
+        with patch("repolint.utils.search_repositories_by_query") as mock_search:
+            mock_search.side_effect = [
+                ["canonical/charm-b"],  # for config query
+                ["canonical/charm-c"],  # for extra query
+            ]
+            result = resolve_repositories(config, extra_query="org:canonical topic:y")
+        assert result == ["canonical/charm-a", "canonical/charm-b", "canonical/charm-c"]
+
+    def test_deduplicates_across_sources(self):
+        config = {"repositories": ["canonical/charm-a"]}
+        with patch("repolint.utils.search_repositories_by_query") as mock_search:
+            mock_search.return_value = ["canonical/charm-a", "canonical/charm-b"]
+            result = resolve_repositories(config, extra_query="org:canonical")
+        assert result == ["canonical/charm-a", "canonical/charm-b"]
+
+    def test_no_query_skips_search(self):
+        config = {"repositories": ["canonical/charm-a"]}
+        with patch("repolint.utils.search_repositories_by_query") as mock_search:
+            result = resolve_repositories(config)
+        mock_search.assert_not_called()
+        assert result == ["canonical/charm-a"]
+
+    def test_empty_repositories_with_query_only(self):
+        config = {"repository_query": "org:canonical topic:x"}
+        with patch("repolint.utils.search_repositories_by_query") as mock_search:
+            mock_search.return_value = ["canonical/charm-a"]
+            result = resolve_repositories(config)
+        assert result == ["canonical/charm-a"]
 
 
 class TestSanitize:
