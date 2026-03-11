@@ -176,17 +176,19 @@ class TestAnalyzeRepo:
         with (
             patch("repolint.report.list_criteria") as mock_lc,
             patch("repolint.report.get_check_function") as mock_gcf,
-            patch("repolint.report.aggregate_check"),
         ):
             mock_lc.return_value = [
                 {"name": "check_a", "description": "A"},
                 {"name": "check_b", "description": "B", "depends_on": ["check_a"]},
             ]
-            mock_gcf.return_value = lambda repo, previous_results, check_name: {
+            mock_gcf.return_value = lambda repo, previous_results=None: {
                 "result": CHECK_COMPLIANT,
                 "message": "ok",
             }
             results = analyze_repo("canonical/test-repo")
+
+        assert "check_a" in results
+        assert "check_b" in results
 
         assert "check_a" in results
         assert "check_b" in results
