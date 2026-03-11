@@ -217,15 +217,11 @@ class TestGetRepositorySlug:
 class TestGetRepositoryDetailsFilename:
     def test_format(self):
         result = get_repository_details_filename("canonical/my-charm")
-        assert result == "quality-canonical-my-charm-details.md"
+        assert result == "canonical-my-charm-details.md"
 
     def test_simple_name(self):
         result = get_repository_details_filename("org/repo")
-        assert result == "quality-org-repo-details.md"
-
-    def test_custom_output(self):
-        result = get_repository_details_filename("org/repo", output="emea")
-        assert result == "emea-org-repo-details.md"
+        assert result == "org-repo-details.md"
 
 
 class TestFindFilesInPath:

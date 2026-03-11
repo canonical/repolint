@@ -111,7 +111,7 @@ def main() -> None:
         sys.exit(1)
 
     for repo, repo_results in results.items():
-        details_file = REPORTS_PATH / get_repository_details_filename(repo, args.output)
+        details_file = REPORTS_PATH / get_repository_details_filename(repo)
         details_file.write_text(render_markdown_details(repo, repo_results))
 
     print(f"Reports written to {REPORTS_PATH}/")

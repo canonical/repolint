@@ -23,9 +23,9 @@ def get_repository_slug(repo: str) -> str:
     return repo.replace("/", "-")
 
 
-def get_repository_details_filename(repo: str, output: str = "quality") -> str:
+def get_repository_details_filename(repo: str) -> str:
     """Return the filename of the detailed markdown report for a repository."""
-    return f"{output}-{get_repository_slug(repo)}-details.md"
+    return f"{get_repository_slug(repo)}-details.md"
 
 
 def _validate_repositories(data: dict, config_path: Path) -> None:
