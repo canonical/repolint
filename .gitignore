@@ -191,6 +191,9 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# repolint generated reports
+reports/
+
 # PyPI configuration file
 .pypirc
 
