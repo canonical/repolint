@@ -404,7 +404,7 @@ wheels = [
 
 [[package]]
 name = "repolint"
-version = "0.1.0"
+version = "0.1.7"
 source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },
@@ -416,6 +416,9 @@ coverage-report = [
 ]
 fmt = [
     { name = "ruff" },
+]
+integration = [
+    { name = "pytest" },
 ]
 lint = [
     { name = "codespell" },
@@ -440,6 +443,7 @@ requires-dist = [{ name = "pyyaml", specifier = ">=6.0.3" }]
 [package.metadata.requires-dev]
 coverage-report = [{ name = "coverage", extras = ["toml"] }]
 fmt = [{ name = "ruff" }]
+integration = [{ name = "pytest" }]
 lint = [
     { name = "codespell" },
     { name = "mypy" },

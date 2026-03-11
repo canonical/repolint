@@ -112,14 +112,12 @@ class TestRenderMarkdownOverview:
                 return_value="details.md",
             ),
         ):
-            mock_lc.return_value = [
-                _mock_check("check_b", description="Second check", parent="some_parent")
-            ]
+            mock_lc.return_value = [_mock_check("check_b", description="Second check", parent="")]
             results: dict = {"canonical/my-charm": {}}  # no check_b entry
             with pytest.raises(RuntimeError, match="check_b"):
                 render_markdown_overview(results)
 
-    def test_hidden_criteria_excluded_from_headers(self):
+    def test_leaf_checks_excluded_from_headers(self):
         with (
             patch("repolint.report.list_checks") as mock_lc,
             patch(
@@ -128,19 +126,19 @@ class TestRenderMarkdownOverview:
             ),
         ):
             mock_lc.return_value = [
-                _mock_check("hidden_check", description="Hidden", parent="_internal"),
-                _mock_check("visible_check", description="Visible", parent="some_parent"),
+                _mock_check("parent_check", description="Parent", parent=""),
+                _mock_check("leaf_check", description="Leaf", parent="parent_check"),
             ]
             results = {
                 "canonical/my-charm": {
-                    "hidden_check": CheckResult(CheckStatus.COMPLIANT, ""),
-                    "visible_check": CheckResult(CheckStatus.COMPLIANT, ""),
+                    "parent_check": CheckResult(CheckStatus.COMPLIANT, ""),
+                    "leaf_check": CheckResult(CheckStatus.COMPLIANT, ""),
                 }
             }
             md = render_markdown_overview(results)
 
-        assert "visible_check" in md
-        assert "hidden_check" not in md
+        assert "parent_check" in md
+        assert "leaf_check" not in md
 
 
 # ---------------------------------------------------------------------------

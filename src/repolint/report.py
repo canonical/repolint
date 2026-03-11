@@ -26,7 +26,7 @@ def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
 
 def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
     """Render a Markdown table summarising all repositories against visible criteria."""
-    visible_checks = [c for c in list_checks() if c.parent and c.parent != "_internal"]
+    visible_checks = [c for c in list_checks() if not c.parent]
     headers = ["Repository"] + [
         f"<span title='{sanitize(c.description)}'>{c.name}</span>" for c in visible_checks
     ]
