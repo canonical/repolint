@@ -16,7 +16,7 @@ class Ck8sCheck(Check):
     depends_on = ["contains_k8s_charm"]  # noqa: RUF012
     description = "Repository uses CK8s."
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Check that the repository's GitHub workflows use canonical Kubernetes."""
         local_repo = clone_repository_locally(repo)
         expected_conf = "use-canonical-k8s: true"

@@ -16,7 +16,7 @@ class Juju4Check(Check):
     depends_on = ["contains_charm"]  # noqa: RUF012
     description = "Repository has tests for Juju 4."
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Check that the repository has at least one workflow targeting Juju 4."""
         local_repo = clone_repository_locally(repo)
         expected_conf = "juju-channel:.*4/stable"

@@ -17,17 +17,18 @@ class CharmLibsCheck(Check):
     """
 
     name = "charmlibs"
-    parent = ""
+    parent = "dependencies"
     depends_on = ["contains_charm"]  # noqa: RUF012
     description = "Repository uses charmlibs for shared code."
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Check that the repository does not use deprecated operator_libs_linux."""
         local_repo = clone_repository_locally(repo)
         pattern = "from charms.operator_libs_linux"
         if find_regexp_in_path(local_repo, pattern=pattern, recursive=True):
             return CheckResult(
-                CheckStatus.NOT_COMPLIANT, "Found imports of charms.operator_libs_linux."
+                CheckStatus.NOT_COMPLIANT,
+                "Found imports of charms.operator_libs_linux.",
             )
         return CheckResult(
             CheckStatus.COMPLIANT, "No reference to charms.operator_libs_linux found."

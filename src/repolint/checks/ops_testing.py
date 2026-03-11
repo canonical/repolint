@@ -16,7 +16,7 @@ class OpsTestingCheck(Check):
     depends_on = ["contains_charm"]  # noqa: RUF012
     description = "Repository doesn't use harness."
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Check that the repository uses ops.testing instead of the old Harness."""
         local_repo = clone_repository_locally(repo)
         if find_regexp_in_path(local_repo, pattern="harness", recursive=True):

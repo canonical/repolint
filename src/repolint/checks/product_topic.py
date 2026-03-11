@@ -15,7 +15,7 @@ class ProductTopicCheck(Check):
     parent = "github"
     description = "Repository has a product-xxx topic. To fix it, add the topic via canonical-repo-automation."
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Check that the repository has a product-xxx topic."""
         topics = get_repository_topics(repo)
         if any(topic.startswith("product-") for topic in topics):

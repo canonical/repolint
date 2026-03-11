@@ -83,7 +83,7 @@ class Check(ABC):
             _REGISTRY[cls.name] = cls()
 
     @abstractmethod
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Execute the check logic for *repo* and return a CheckResult."""
 
     def _apply_pre_checks(
@@ -118,7 +118,7 @@ class Check(ABC):
         if pre is not None:
             return pre
         try:
-            return self.run(repo, previous_results)
+            return self.run(repo)
         except subprocess.CalledProcessError as e:
             return CheckResult(CheckStatus.NOT_COMPLIANT, f"Failed to clone repository: {e}")
 
@@ -157,7 +157,7 @@ class ParentCheck(Check):
     def hidden(self) -> bool:  # type: ignore[override]
         return self._hidden
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         raise RuntimeError(
             "ParentCheck.run() should never be called directly."
         )  # pragma: no cover

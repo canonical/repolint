@@ -17,7 +17,7 @@ class ContainsK8sCharmCheck(Check):
     hidden = True
     description = "Repository contains at least one Kubernetes charm."
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Check that the repository contains at least one Kubernetes charm."""
         local_repo = clone_repository_locally(repo)
         charms = find_charmcraft_paths(local_repo)

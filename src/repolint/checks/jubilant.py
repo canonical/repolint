@@ -16,7 +16,7 @@ class JubilantCheck(Check):
     depends_on = ["contains_charm"]  # noqa: RUF012
     description = "Repository uses Jubilant for charm testing."
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Check that all charms use Jubilant for integration testing."""
         local_repo = clone_repository_locally(repo)
         expected_conf = "import jubilant"

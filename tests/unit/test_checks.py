@@ -22,7 +22,7 @@ def _make_simple_check(check_name: str, result: CheckStatus = CheckStatus.COMPLI
         description = "test"
         parent = ""
 
-        def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+        def run(self, repo: str) -> CheckResult:
             return CheckResult(result, "ran")
 
     # Remove from registry so test helpers don't pollute other tests.
@@ -101,7 +101,7 @@ class TestParentCheck:
         """Create and manually register a child check."""
 
         class _ChildCheck(Check):
-            def run(self, repo, previous_results):
+            def run(self, repo):
                 return CheckResult(result, "ran")
 
         _ChildCheck.name = name  # type: ignore[attr-defined]
@@ -160,7 +160,7 @@ class TestCheckDescription:
             description = "A test description."
             parent = ""
 
-            def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+            def run(self, repo: str) -> CheckResult:
                 return CheckResult(CheckStatus.COMPLIANT, "")
 
         check = _REGISTRY.pop("_test_desc_a")
@@ -186,7 +186,7 @@ class TestInitSubclassEnforcement:
                 name = "_test_bad_no_desc"  # type: ignore[assignment]
                 parent = ""
 
-                def run(self, repo, previous_results):
+                def run(self, repo):
                     return CheckResult(CheckStatus.COMPLIANT, "")
 
             _REGISTRY.pop("_test_bad_no_desc", None)
@@ -198,7 +198,7 @@ class TestInitSubclassEnforcement:
                 name = "_test_bad_no_parent"  # type: ignore[assignment]
                 description = "desc"
 
-                def run(self, repo, previous_results):
+                def run(self, repo):
                     return CheckResult(CheckStatus.COMPLIANT, "")
 
             _REGISTRY.pop("_test_bad_no_parent", None)

@@ -16,7 +16,7 @@ class TfV1Check(Check):
     depends_on = ["contains_charm"]  # noqa: RUF012
     description = "Repository uses Terraform Juju provider v1."
 
-    def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
+    def run(self, repo: str) -> CheckResult:
         """Check that all Terraform modules use Juju provider v1."""
         local_repo = clone_repository_locally(repo)
         expected_conf = r'juju\s*=\s*\{.*?\bversion\s*=\s*"~> 1\.'
