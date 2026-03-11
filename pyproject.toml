@@ -188,7 +188,7 @@ commands = coverage report
 description = Run static analysis checks
 deps = bandit[toml]
 commands =
-    bandit -c {toxinidir}/pyproject.toml -r {toxinidir}/src {toxinidir}/tests
+    bandit -c {toxinidir}/pyproject.toml -r {toxinidir}/src {toxinidir}/tests -ll
 """
 
 # ---------------------------------------------------------------------------

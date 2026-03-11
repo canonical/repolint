@@ -56,7 +56,7 @@ def get_repository_topics(repo: str) -> list[str]:
 
 def clone_repository_locally(repo: str) -> Path:
     """Clone the repository locally (shallow) and return its path."""
-    local_path = Path(TMP_DIR) / repo.replace("/", "_")
+    local_path = TMP_DIR / repo.replace("/", "_")
     if not local_path.exists():
         subprocess.run(
             ["gh", "repo", "clone", repo, str(local_path), "--", "--depth", "1"],  # noqa: S607

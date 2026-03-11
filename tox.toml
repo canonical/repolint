@@ -69,7 +69,7 @@ dependency_groups = ["coverage-report"]
 
 [env.static]
 description = "Run static analysis checks"
-commands = [["bandit", "-c", "{toxinidir}/pyproject.toml", "-r", "{[vars]src_path}", "{[vars]tst_path}"]]
+commands = [["bandit", "-c", "{toxinidir}/pyproject.toml", "-r", "{[vars]src_path}", "{[vars]tst_path}", "-ll"]]
 dependency_groups = ["static"]
 
 [vars]
