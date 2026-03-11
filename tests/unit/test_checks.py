@@ -108,7 +108,6 @@ class TestParentCheck:
         _ChildCheck.description = "test"  # type: ignore[attr-defined]
         _ChildCheck.parent = parent_name  # type: ignore[attr-defined]
         _ChildCheck.depends_on = []  # type: ignore[attr-defined]
-        _ChildCheck.hidden = False  # type: ignore[attr-defined]
 
         instance = object.__new__(_ChildCheck)
         _REGISTRY[name] = instance

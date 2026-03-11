@@ -12,9 +12,8 @@ class ContainsK8sCharmCheck(Check):
     """Check that the repository contains at least one Kubernetes charm."""
 
     name = "contains_k8s_charm"
-    parent = ""
+    parent = "_internal"
     depends_on = ["contains_charm"]  # noqa: RUF012
-    hidden = True
     description = "Repository contains at least one Kubernetes charm."
 
     def run(self, repo: str) -> CheckResult:

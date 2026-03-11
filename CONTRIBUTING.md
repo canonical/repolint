@@ -147,4 +147,3 @@ The parent check result is derived dynamically from all registered checks whose
 `parent` attribute equals `"my_parent"`.
 
 The parent check appears as a column in the overview Markdown table.
-Set `hidden=True` to suppress it from the overview.

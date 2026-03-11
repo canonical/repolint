@@ -67,7 +67,6 @@ class Check(ABC):
     description: str  # human-readable description — subclasses must define this
     parent: str  # name of the ParentCheck this check belongs to, or "" if none
     depends_on: ClassVar[list[str]] = []
-    hidden: bool = False  # if True, not shown in overview report
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
@@ -133,12 +132,10 @@ class ParentCheck(Check):
         name: str,
         description: str = "",
         depends_on: list[str] | None = None,
-        hidden: bool = False,
     ) -> None:
         self._name = name
         self._description = description
         self._depends_on = depends_on or []
-        self._hidden = hidden
         _REGISTRY[name] = self
 
     @property  # type: ignore[override]
@@ -152,10 +149,6 @@ class ParentCheck(Check):
     @property  # type: ignore[override]
     def depends_on(self) -> list[str]:  # type: ignore[override]
         return self._depends_on
-
-    @property  # type: ignore[override]
-    def hidden(self) -> bool:  # type: ignore[override]
-        return self._hidden
 
     def run(self, repo: str) -> CheckResult:
         raise RuntimeError(

@@ -12,8 +12,7 @@ class ContainsCharmCheck(Check):
     """Check that the repository contains at least one charm."""
 
     name = "contains_charm"
-    parent = ""
-    hidden = True
+    parent = "_internal"
     description = "Repository contains at least one charm (charmcraft.yaml file)."
 
     def run(self, repo: str) -> CheckResult:

@@ -18,8 +18,8 @@ from repolint.report import (
 )
 
 
-def _mock_check(name, description="desc", hidden=False, parent=""):
-    return SimpleNamespace(name=name, description=description, hidden=hidden, parent=parent)
+def _mock_check(name, description="desc", parent=""):
+    return SimpleNamespace(name=name, description=description, parent=parent)
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +68,10 @@ class TestRenderMarkdownOverview:
     def test_table_has_header_and_separator(self):
         with (
             patch("repolint.report.list_checks") as mock_lc,
-            patch("repolint.report.get_repository_details_filename", return_value="details.md"),
+            patch(
+                "repolint.report.get_repository_details_filename",
+                return_value="details.md",
+            ),
         ):
             mock_lc.return_value = [_mock_check("check_b", description="Second check")]
             results = {
@@ -85,7 +88,10 @@ class TestRenderMarkdownOverview:
     def test_repo_link_present(self):
         with (
             patch("repolint.report.list_checks") as mock_lc,
-            patch("repolint.report.get_repository_details_filename", return_value="details.md"),
+            patch(
+                "repolint.report.get_repository_details_filename",
+                return_value="details.md",
+            ),
         ):
             mock_lc.return_value = [_mock_check("check_b", description="Second check")]
             results = {
@@ -101,23 +107,29 @@ class TestRenderMarkdownOverview:
     def test_missing_criterion_result_raises(self):
         with (
             patch("repolint.report.list_checks") as mock_lc,
-            patch("repolint.report.get_repository_details_filename", return_value="details.md"),
+            patch(
+                "repolint.report.get_repository_details_filename",
+                return_value="details.md",
+            ),
         ):
-            mock_lc.return_value = [_mock_check("check_b", description="Second check")]
-            results: dict = {
-                "canonical/my-charm": {}  # no check_b entry
-            }
+            mock_lc.return_value = [
+                _mock_check("check_b", description="Second check", parent="some_parent")
+            ]
+            results: dict = {"canonical/my-charm": {}}  # no check_b entry
             with pytest.raises(RuntimeError, match="check_b"):
                 render_markdown_overview(results)
 
     def test_hidden_criteria_excluded_from_headers(self):
         with (
             patch("repolint.report.list_checks") as mock_lc,
-            patch("repolint.report.get_repository_details_filename", return_value="details.md"),
+            patch(
+                "repolint.report.get_repository_details_filename",
+                return_value="details.md",
+            ),
         ):
             mock_lc.return_value = [
-                _mock_check("hidden_check", description="Hidden", hidden=True),
-                _mock_check("visible_check", description="Visible"),
+                _mock_check("hidden_check", description="Hidden", parent="_internal"),
+                _mock_check("visible_check", description="Visible", parent="some_parent"),
             ]
             results = {
                 "canonical/my-charm": {
