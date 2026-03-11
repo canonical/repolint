@@ -171,6 +171,17 @@ class TestCheckDescription:
             assert isinstance(check.description, str), f"{check.name}.description is not a str"
             assert check.description, f"{check.name}.description is empty"
 
+    def test_all_leaf_checks_have_valid_parent(self):
+        """Every leaf check must declare a parent that is either '_internal' or a registered ParentCheck."""
+        parent_names = {c.name for c in list_checks() if isinstance(c, ParentCheck)}
+        valid_parents = parent_names | {"_internal"}
+        invalid = [
+            c.name
+            for c in list_checks()
+            if not isinstance(c, ParentCheck) and c.parent not in valid_parents
+        ]
+        assert not invalid, f"Leaf checks with unregistered parent: {invalid}"
+
 
 # ---------------------------------------------------------------------------
 # __init_subclass__ enforcement

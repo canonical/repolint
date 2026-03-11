@@ -51,6 +51,11 @@ ParentCheck(
     description="Repository follows our Terraform best practices.",
     depends_on=["contains_charm"],
 )
+ParentCheck(
+    "dependencies",
+    description="Repository uses up-to-date charm libraries and avoids deprecated dependencies.",
+    depends_on=["contains_charm"],
+)
 
 __all__ = [
     "Check",
