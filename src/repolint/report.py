@@ -7,7 +7,7 @@ from datetime import datetime
 
 from repolint.checks import CheckResult, aggregate_check, get_check_function
 from repolint.criteria import get_criterion_by_name, list_criteria
-from repolint.utils import get_repository_details_filename, list_repositories, sanitize
+from repolint.utils import get_repository_details_filename, sanitize
 
 
 def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
@@ -73,9 +73,8 @@ def analyze_repo(repo: str) -> dict[str, CheckResult]:
     return repo_results
 
 
-def analyze(squad: str) -> dict[str, dict[str, CheckResult]]:
-    """Run compliance checks for all repositories in a squad."""
-    repositories = sorted(list_repositories(squad))
-    print(f"Analyzing the following repositories for {squad}:")
-    print("\n".join(repositories))
-    return {repo: analyze_repo(repo) for repo in repositories}
+def analyze(repositories: list[str]) -> dict[str, dict[str, CheckResult]]:
+    """Run compliance checks for a list of repositories."""
+    print("Analyzing the following repositories:")
+    print("\n".join(sorted(repositories)))
+    return {repo: analyze_repo(repo) for repo in sorted(repositories)}

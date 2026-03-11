@@ -15,7 +15,9 @@ classifiers = [
 ]
 # No external runtime dependencies – the script relies entirely on the stdlib
 # and the 'gh' CLI tool available in the execution environment.
-dependencies = []
+dependencies = [
+    "pyyaml>=6.0.3",
+]
 
 [project.scripts]
 repolint = "repolint.__main__:main"
@@ -43,9 +45,11 @@ lint = [
   "pep8-naming",
   "pytest",
   "ruff",
+  "types-pyyaml",
 ]
 unit = [
   "coverage[toml]",
+  "pyyaml",
   "pytest",
 ]
 coverage-report = [
@@ -158,6 +162,7 @@ deps =
     pep8-naming
     pytest
     ruff
+    types-pyyaml
 commands =
     codespell {toxinidir}
     ruff format --check --diff {toxinidir}/src {toxinidir}/tests
@@ -174,6 +179,7 @@ commands =
 description = Run unit tests
 deps =
     coverage[toml]
+    pyyaml
     pytest
 commands =
     coverage run --source={toxinidir}/src -m pytest {toxinidir}/tests/unit -v --tb native -s {posargs}

@@ -8,7 +8,9 @@ import subprocess
 from functools import lru_cache
 from pathlib import Path
 
-from repolint.config import CONFIG_PATH, TMP_DIR
+import yaml
+
+from repolint.config import TMP_DIR
 
 
 def sanitize(text: str) -> str:
@@ -26,13 +28,35 @@ def get_repository_details_filename(repo: str) -> str:
     return f"quality-{get_repository_slug(repo)}-details.md"
 
 
-def list_repositories(squad: str) -> list[str]:
-    """List repositories to analyze for a given squad or 'all'."""
-    if squad == "all":
-        repo_file = CONFIG_PATH / "repos.txt"
-    else:
-        repo_file = CONFIG_PATH / f"squad-repos.{squad}.txt"
-    return repo_file.read_text().splitlines()
+def load_repositories(config_path: Path) -> list[str]:
+    """Load the list of repositories from a repolint YAML config file.
+
+    The config file must contain a top-level ``repositories`` key whose value
+    is a list of strings in ``org/repo`` format::
+
+        repositories:
+          - canonical/my-charm
+          - canonical/another-charm
+    """
+    try:
+        with config_path.open() as fh:
+            data = yaml.safe_load(fh)
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"Config file not found: {config_path}. "
+            "Create a repolint.yaml with a 'repositories' list."
+        )
+    if not isinstance(data, dict) or "repositories" not in data:
+        raise ValueError(f"Config file {config_path} must contain a top-level 'repositories' key.")
+    repos = data["repositories"]
+    if not isinstance(repos, list):
+        raise ValueError(f"'repositories' in {config_path} must be a list.")
+    invalid = [r for r in repos if not isinstance(r, str) or "/" not in r]
+    if invalid:
+        raise ValueError(
+            f"Invalid repository entries in {config_path} (expected 'org/repo'): {invalid}"
+        )
+    return repos
 
 
 @lru_cache(maxsize=200)

@@ -8,7 +8,12 @@ from unittest.mock import patch
 import pytest
 
 from repolint.config import CHECK_COMPLIANT, CHECK_NOT_COMPLIANT
-from repolint.report import analyze_repo, render_markdown_details, render_markdown_overview
+from repolint.report import (
+    analyze,
+    analyze_repo,
+    render_markdown_details,
+    render_markdown_overview,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -196,3 +201,24 @@ class TestAnalyzeRepo:
             ]
             with pytest.raises(RuntimeError, match="check_a"):
                 analyze_repo("canonical/test-repo")
+
+
+# ---------------------------------------------------------------------------
+# analyze
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyze:
+    def test_returns_results_for_all_repos(self):
+        repos = ["canonical/repo-a", "canonical/repo-b"]
+        with patch("repolint.report.analyze_repo") as mock_ar:
+            mock_ar.return_value = {"check_a": {"result": CHECK_COMPLIANT, "message": ""}}
+            results = analyze(repos)
+        assert set(results.keys()) == set(repos)
+
+    def test_repos_are_sorted(self):
+        repos = ["canonical/z-repo", "canonical/a-repo"]
+        with patch("repolint.report.analyze_repo") as mock_ar:
+            mock_ar.return_value = {}
+            results = analyze(repos)
+        assert list(results.keys()) == ["canonical/a-repo", "canonical/z-repo"]

@@ -3,14 +3,52 @@
 
 """Unit tests for repolint.utils."""
 
+import pytest
+
 from repolint.utils import (
     find_charmcraft_paths,
     find_files_in_path,
     find_regexp_in_path,
     get_repository_details_filename,
     get_repository_slug,
+    load_repositories,
     sanitize,
 )
+
+
+class TestLoadRepositories:
+    def test_loads_valid_config(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repositories:\n  - canonical/charm-a\n  - canonical/charm-b\n")
+        result = load_repositories(config)
+        assert result == ["canonical/charm-a", "canonical/charm-b"]
+
+    def test_raises_file_not_found(self, tmp_path):
+        with pytest.raises(FileNotFoundError, match=r"repolint\.yaml"):
+            load_repositories(tmp_path / "repolint.yaml")
+
+    def test_raises_when_repositories_key_missing(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("something_else:\n  - canonical/charm-a\n")
+        with pytest.raises(ValueError, match="repositories"):
+            load_repositories(config)
+
+    def test_raises_when_repositories_not_a_list(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repositories: canonical/charm-a\n")
+        with pytest.raises(ValueError, match="list"):
+            load_repositories(config)
+
+    def test_raises_on_invalid_repo_format(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repositories:\n  - not-a-valid-repo\n")
+        with pytest.raises(ValueError, match="not-a-valid-repo"):
+            load_repositories(config)
+
+    def test_empty_repositories_list(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text("repositories: []\n")
+        assert load_repositories(config) == []
 
 
 class TestSanitize:

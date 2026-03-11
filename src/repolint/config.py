@@ -6,9 +6,8 @@
 import tempfile
 from pathlib import Path
 
-CONFIG_PATH = Path("config/")
+DEFAULT_CONFIG_FILE = Path("repolint.yaml")
 REPORTS_PATH = Path("reports/")
-SQUADS = {"apac", "americas", "emea"}
 SQUAD_TOPICS = {"squad-apac", "squad-amer", "squad-emea"}
 TMP_DIR = Path(tempfile.gettempdir()) / "repo_clones"
 

@@ -27,49 +27,40 @@ pip install git+https://github.com/canonical/repolint
 
 ## Configuration
 
-`repolint` reads repository lists from a `config/` directory **in the working
-directory where you run the command**. Create one file per squad:
+Create a `repolint.yaml` file **in the directory where you run the command**:
 
-```
-config/
-├── squad-repos.americas.txt
-├── squad-repos.apac.txt
-└── squad-repos.emea.txt
-```
-
-Each file contains one fully-qualified GitHub repository name per line:
-
-```
-canonical/my-charm
-canonical/another-charm
+```yaml
+repositories:
+  - canonical/my-charm
+  - canonical/another-charm
+  - canonical/yet-another-charm
 ```
 
-When using the `all` scope, `repolint` reads each squad file in turn and merges
-the results.
+Each entry is a fully-qualified GitHub repository name in `org/repo` format.
+
+A different config file can be passed via the `--config` flag (see [Usage](#usage)).
 
 ## Usage
 
-```
-repolint <scope>
+```bash
+repolint [--config PATH]
 ```
 
-| Scope | Description |
-|---|---|
-| `all` | Analyse every repository across all squads |
-| `americas` / `apac` / `emea` | Analyse repositories for a single squad |
-| `canonical/repo-name` | Debug a single repository (prints JSON + Markdown to stdout) |
+| Option | Default | Description |
+|---|---|---|
+| `--config PATH` | `repolint.yaml` | Path to the YAML configuration file |
 
 ### Examples
 
 ```bash
-# Analyse all squads
-repolint all
+# Analyse repositories listed in repolint.yaml (current directory)
+repolint
 
-# Analyse one squad
-repolint apac
+# Use a custom configuration file
+repolint --config ~/my-repos.yaml
 
-# Debug a single repository
-repolint canonical/my-charm
+# Use a config file in another directory
+repolint --config /path/to/project/repolint.yaml
 ```
 
 ### Output
@@ -78,21 +69,10 @@ Reports are written to a `reports/` directory in the working directory:
 
 | File | Contents |
 |---|---|
-| `reports/quality-<squad>.md` | Markdown table — one row per repository, one column per visible check |
-| `reports/quality-<squad>.json` | Raw JSON results for all checks |
-| `reports/quality-<repo>-details.md` | Per-repository detail report |
-| `reports/quality-all.md` | Combined table across all squads (only with `all` scope) |
+| `reports/quality.md` | Markdown table — one row per repository, one column per visible check |
+| `reports/quality.json` | Raw JSON results for all checks |
 
-> **Tip:** Preview Markdown locally with `pip install grip && grip reports/quality-all.md`
-
-#### Caching
-
-If a `quality-<squad>.json` file already exists, `repolint` reuses it instead of
-re-running the analysis. Delete the file to force a fresh run:
-
-```bash
-rm reports/quality-apac.json && repolint apac
-```
+> **Tip:** Preview Markdown locally with `pip install grip && grip reports/quality.md`
 
 ## Checks
 
@@ -160,13 +140,13 @@ tox -e fmt       # auto-format with ruff
 
 ```
 src/repolint/
-├── config.py      # Constants (squad names, check symbols, paths)
+├── config.py      # Constants (check symbols, paths, defaults)
 ├── criteria.py    # Check catalogue — add new checks here
 ├── checks.py      # @check decorator, registry, check implementations
 ├── report.py      # Report rendering and analysis orchestration
 ├── __main__.py    # CLI entry point
 tests/unit/        # Unit tests (pytest)
-config/            # Repository lists (not committed — add your own)
+repolint.yaml      # Repository list (create your own — not committed)
 reports/           # Generated reports (git-ignored)
 ```
 
