@@ -129,7 +129,7 @@ Each repository is evaluated against the following criteria.
 Results are cached in `reports/quality.json` so subsequent runs only re-run
 checks for repositories that have not been analysed yet.
 
-### Aggregate checks (shown in the overview table)
+### Overview checks (shown in the overview table)
 
 | Check | Description |
 | --- | --- |

@@ -12,8 +12,8 @@ class Ck8sCheck(Check):
     """Check that the repository's GitHub workflows use canonical Kubernetes."""
 
     name = "ck8s"
+    parent = "integration_tests"
     depends_on = ["contains_k8s_charm"]  # noqa: RUF012
-    hidden = True
     description = "Repository uses CK8s."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:

@@ -12,8 +12,8 @@ class Juju4Check(Check):
     """Check that the repository has at least one workflow targeting Juju 4."""
 
     name = "juju4"
+    parent = "integration_tests"
     depends_on = ["contains_charm"]  # noqa: RUF012
-    hidden = True
     description = "Repository has tests for Juju 4."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:

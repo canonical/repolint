@@ -5,8 +5,8 @@
 
 import pytest
 
-from repolint.checks import Check, CheckResult, get_check, list_checks
-from repolint.checks._base import configure_checks
+from repolint.checks import Check, CheckResult, ParentCheck, get_check, list_checks
+from repolint.checks._base import _REGISTRY, configure_checks
 from repolint.config import CheckStatus
 
 # ---------------------------------------------------------------------------
@@ -19,13 +19,13 @@ def _make_simple_check(check_name: str, result: CheckStatus = CheckStatus.COMPLI
 
     class _SimpleCheck(Check):
         name = check_name  # type: ignore[assignment]
+        description = "test"
+        parent = ""
 
         def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
             return CheckResult(result, "ran")
 
     # Remove from registry so test helpers don't pollute other tests.
-    from repolint.checks._base import _REGISTRY
-
     return _REGISTRY.pop(check_name)  # returns the auto-registered instance
 
 
@@ -84,37 +84,68 @@ class TestCheckDependencies:
 
 
 # ---------------------------------------------------------------------------
-# Check.__call__ — aggregate handling
+# ParentCheck — dynamic child discovery
 # ---------------------------------------------------------------------------
 
 
-class TestCheckAggregates:
-    def test_all_subchecks_compliant_returns_compliant(self):
-        check = _make_simple_check("_test_agg_a")
-        check.aggregates = ["sub_a", "sub_b"]  # type: ignore[assignment]
+class TestParentCheck:
+    def setup_method(self):
+        # Clean up any test keys we add
+        self._added: list[str] = []
+
+    def teardown_method(self):
+        for key in self._added:
+            _REGISTRY.pop(key, None)
+
+    def _register_child(self, name: str, parent_name: str, result: CheckStatus) -> Check:
+        """Create and manually register a child check."""
+
+        class _ChildCheck(Check):
+            def run(self, repo, previous_results):
+                return CheckResult(result, "ran")
+
+        _ChildCheck.name = name  # type: ignore[attr-defined]
+        _ChildCheck.description = "test"  # type: ignore[attr-defined]
+        _ChildCheck.parent = parent_name  # type: ignore[attr-defined]
+        _ChildCheck.depends_on = []  # type: ignore[attr-defined]
+        _ChildCheck.hidden = False  # type: ignore[attr-defined]
+
+        instance = object.__new__(_ChildCheck)
+        _REGISTRY[name] = instance
+        self._added.append(name)
+        return instance
+
+    def test_all_children_compliant_returns_compliant(self):
+        parent = ParentCheck("_test_parent_a")
+        self._added.append("_test_parent_a")
+        self._register_child("_child_a1", "_test_parent_a", CheckStatus.COMPLIANT)
+        self._register_child("_child_a2", "_test_parent_a", CheckStatus.COMPLIANT)
         previous = {
-            "sub_a": CheckResult(CheckStatus.COMPLIANT, ""),
-            "sub_b": CheckResult(CheckStatus.COMPLIANT, ""),
+            "_child_a1": CheckResult(CheckStatus.COMPLIANT, ""),
+            "_child_a2": CheckResult(CheckStatus.COMPLIANT, ""),
         }
-        result = check("canonical/some-repo", previous_results=previous)
+        result = parent("canonical/some-repo", previous_results=previous)
         assert result.result == CheckStatus.COMPLIANT
 
-    def test_one_subcheck_failing_returns_not_compliant(self):
-        check = _make_simple_check("_test_agg_b")
-        check.aggregates = ["sub_a", "sub_b"]  # type: ignore[assignment]
+    def test_one_child_failing_returns_not_compliant(self):
+        parent = ParentCheck("_test_parent_b")
+        self._added.append("_test_parent_b")
+        self._register_child("_child_b1", "_test_parent_b", CheckStatus.COMPLIANT)
+        self._register_child("_child_b2", "_test_parent_b", CheckStatus.NOT_COMPLIANT)
         previous = {
-            "sub_a": CheckResult(CheckStatus.COMPLIANT, ""),
-            "sub_b": CheckResult(CheckStatus.NOT_COMPLIANT, "failed"),
+            "_child_b1": CheckResult(CheckStatus.COMPLIANT, ""),
+            "_child_b2": CheckResult(CheckStatus.NOT_COMPLIANT, "failed"),
         }
-        result = check("canonical/some-repo", previous_results=previous)
+        result = parent("canonical/some-repo", previous_results=previous)
         assert result.result == CheckStatus.NOT_COMPLIANT
-        assert "sub_b" in result.message
+        assert "_child_b2" in result.message
 
-    def test_missing_subcheck_raises(self):
-        check = _make_simple_check("_test_agg_c")
-        check.aggregates = ["missing_sub"]  # type: ignore[assignment]
+    def test_missing_child_result_raises(self):
+        parent = ParentCheck("_test_parent_c")
+        self._added.append("_test_parent_c")
+        self._register_child("_child_c1", "_test_parent_c", CheckStatus.COMPLIANT)
         with pytest.raises(RuntimeError):
-            check("canonical/some-repo", previous_results={})
+            parent("canonical/some-repo", previous_results={})
 
 
 # ---------------------------------------------------------------------------
@@ -127,11 +158,10 @@ class TestCheckDescription:
         class _DescCheck(Check):
             name = "_test_desc_a"  # type: ignore[assignment]
             description = "A test description."
+            parent = ""
 
             def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
                 return CheckResult(CheckStatus.COMPLIANT, "")
-
-        from repolint.checks._base import _REGISTRY
 
         check = _REGISTRY.pop("_test_desc_a")
         assert check.description == "A test description."
@@ -141,6 +171,37 @@ class TestCheckDescription:
         for check in list_checks():
             assert isinstance(check.description, str), f"{check.name}.description is not a str"
             assert check.description, f"{check.name}.description is empty"
+
+
+# ---------------------------------------------------------------------------
+# __init_subclass__ enforcement
+# ---------------------------------------------------------------------------
+
+
+class TestInitSubclassEnforcement:
+    def test_missing_description_raises_type_error(self):
+        with pytest.raises(TypeError, match="description"):
+
+            class _BadCheck(Check):
+                name = "_test_bad_no_desc"  # type: ignore[assignment]
+                parent = ""
+
+                def run(self, repo, previous_results):
+                    return CheckResult(CheckStatus.COMPLIANT, "")
+
+            _REGISTRY.pop("_test_bad_no_desc", None)
+
+    def test_missing_parent_raises_type_error(self):
+        with pytest.raises(TypeError, match="parent"):
+
+            class _BadCheck2(Check):
+                name = "_test_bad_no_parent"  # type: ignore[assignment]
+                description = "desc"
+
+                def run(self, repo, previous_results):
+                    return CheckResult(CheckStatus.COMPLIANT, "")
+
+            _REGISTRY.pop("_test_bad_no_parent", None)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +221,7 @@ class TestGetCheckFunction:
         assert instance is None
 
     def test_all_checks_are_registered(self):
-        """Every check (leaf and aggregate) must have a registered Check instance."""
+        """Every check (leaf and parent) must have a registered Check instance."""
         for check in list_checks():
             instance = get_check(check.name)
             assert instance is not None, f"No Check registered for {check.name!r}"
@@ -198,13 +259,16 @@ class TestListChecks:
                 )
             seen.add(check.name)
 
-    def test_aggregates_appear_before_aggregators(self):
+    def test_children_appear_before_parents(self):
         seen: set[str] = set()
         for check in list_checks():
-            for agg in check.aggregates:
-                assert agg in seen, (
-                    f"Check {check.name!r} aggregates {agg!r} which has not appeared yet"
-                )
+            if isinstance(check, ParentCheck):
+                # All children of this parent must have appeared before it
+                children = [c for c in list_checks() if c.parent == check.name]
+                for child in children:
+                    assert child.name in seen, (
+                        f"Child {child.name!r} has not appeared before parent {check.name!r}"
+                    )
             seen.add(check.name)
 
 
@@ -231,9 +295,6 @@ class TestConfigureChecks:
         configure_checks({"squad_topic": {"excluded": ["canonical/excluded-repo"]}})
         check = get_check("squad_topic")
         assert check is not None
-        # "canonical/allowed-repo" is not excluded — check should run (not return NOT_ELIGIBLE
-        # due to exclusion); actual result depends on the repo content, but it won't be
-        # excluded.
         from repolint.checks._base import _checks_overrides
 
         assert "canonical/excluded-repo" in _checks_overrides.get("squad_topic", {}).get(

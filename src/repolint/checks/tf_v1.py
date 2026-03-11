@@ -12,8 +12,8 @@ class TfV1Check(Check):
     """Check that all Terraform modules use Juju provider v1."""
 
     name = "tf_v1"
+    parent = "terraform"
     depends_on = ["contains_charm"]  # noqa: RUF012
-    hidden = True
     description = "Repository uses Terraform Juju provider v1."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:

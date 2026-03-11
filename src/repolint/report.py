@@ -16,12 +16,8 @@ def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
         check = get_check(criterion_name)
         if check is None:
             continue
-        aggregate_label = "(aggregate) " if check.aggregates else ""
         description = sanitize(check.description)
-        markdown += (
-            f"- {aggregate_label}"
-            f"<span title='{description}'>{criterion_name}</span>: {value.result}\n"
-        )
+        markdown += f"- <span title='{description}'>{criterion_name}</span>: {value.result}\n"
         if value.message:
             markdown += f"  - {value.message}\n"
         markdown += "\n"
@@ -30,7 +26,7 @@ def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
 
 def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
     """Render a Markdown table summarising all repositories against visible criteria."""
-    visible_checks = [c for c in list_checks() if not c.hidden]
+    visible_checks = [c for c in list_checks() if not c.hidden and not c.parent]
     headers = ["Repository"] + [
         f"<span title='{sanitize(c.description)}'>{c.name}</span>" for c in visible_checks
     ]

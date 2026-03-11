@@ -12,8 +12,8 @@ class JubilantCheck(Check):
     """Check that all charms use Jubilant for integration testing."""
 
     name = "jubilant"
+    parent = "integration_tests"
     depends_on = ["contains_charm"]  # noqa: RUF012
-    hidden = True
     description = "Repository uses Jubilant for charm testing."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:

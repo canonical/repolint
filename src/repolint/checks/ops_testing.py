@@ -12,8 +12,8 @@ class OpsTestingCheck(Check):
     """Check that the repository uses ops.testing instead of the old Harness."""
 
     name = "ops_testing"
+    parent = "unit_tests"
     depends_on = ["contains_charm"]  # noqa: RUF012
-    hidden = True
     description = "Repository doesn't use harness."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:

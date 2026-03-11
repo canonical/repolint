@@ -17,6 +17,7 @@ class CharmLibsCheck(Check):
     """
 
     name = "charmlibs"
+    parent = ""
     depends_on = ["contains_charm"]  # noqa: RUF012
     description = "Repository uses charmlibs for shared code."
 

@@ -14,7 +14,7 @@ class SquadTopicCheck(Check):
     """Check that the repository has a squad-xxx topic."""
 
     name = "squad_topic"
-    hidden = True
+    parent = "github"
     description = (
         "Repository has a squad-xxx topic. To fix it, add the topic via canonical-repo-automation."
     )

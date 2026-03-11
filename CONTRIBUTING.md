@@ -38,8 +38,8 @@ tox -e integration  # CLI integration tests (requires gh auth and network)
 ```
 src/repolint/
 ├── checks/
-│   ├── _base.py           # Check ABC, AggregateCheck, CheckResult, registry helpers
-│   ├── __init__.py        # Triggers registration; defines AggregateCheck instances
+│   ├── _base.py           # Check ABC, ParentCheck, CheckResult, registry helpers
+│   ├── __init__.py        # Triggers registration; defines ParentCheck instances
 │   ├── squad_topic.py
 │   ├── product_topic.py
 │   └── ...
@@ -63,11 +63,12 @@ automatically registers a singleton instance in the global `_REGISTRY` via
 Check (ABC)
 ├── SquadTopicCheck      name = "squad_topic"
 ├── ...
-└── AggregateCheck       name set via constructor — self-registers on __init__
+└── ParentCheck         name set via constructor — self-registers on __init__
 ```
 
-`AggregateCheck` instances are constructed in `checks/__init__.py` and derive
-their result from a set of sub-checks (the `aggregates` list).  Their `run()`
+`ParentCheck` instances are constructed in `checks/__init__.py` and derive
+their result dynamically from child checks — any `Check` subclass whose
+`parent` attribute matches the `ParentCheck`'s name.  Their `run()`
 is never called directly.
 
 Cross-cutting behaviour lives in `Check.__call__`:
@@ -76,9 +77,7 @@ Cross-cutting behaviour lives in `Check.__call__`:
    in `repolint.yaml`, the check returns `NOT_ELIGIBLE`.
 2. **Dependency enforcement** — if any check listed in `depends_on` is not
    `COMPLIANT`, the check is skipped as `NOT_ELIGIBLE`.
-3. **Aggregate evaluation** — if the check has `aggregates`, the result is derived
-   from those sub-check results; `run()` is not called.
-4. **Error handling** — if `run()` raises `subprocess.CalledProcessError` (e.g.
+3. **Error handling** — if `run()` raises `subprocess.CalledProcessError` (e.g.
    a repository clone failure), the check returns `NOT_COMPLIANT` with the error
    message.
 
@@ -104,7 +103,7 @@ message string.  It serialises to/from plain dicts for JSON caching.
 
        name = "my_check"
        description = "Human-readable description shown in reports."
-       hidden = True   # set False or omit to show in the overview table
+       parent = ""   # set to a ParentCheck name to group under that parent
 
        def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
            # ... implementation ...
@@ -125,24 +124,27 @@ message string.  It serialises to/from plain dicts for JSON caching.
    ```
 
 3. If other checks depend on yours, add `depends_on = ["my_check"]` to those
-   classes, or add `"my_check"` to an `AggregateCheck`'s `aggregates` list in
-   `checks/__init__.py`.
+   classes.  To group this check under a parent, set `parent = "my_parent"` on
+   the class.
 
 4. Add unit tests in `tests/unit/test_checks.py`.
 
-## Adding a new aggregate check
+## Adding a new parent check
 
-Aggregate checks combine existing sub-checks — no `run()` body is needed.
-Add a new `AggregateCheck(...)` call in `checks/__init__.py`:
+Parent checks combine existing child checks — no `run()` body is needed.
+Add a new `ParentCheck(...)` call in `checks/__init__.py`:
 
 ```python
-AggregateCheck(
-    "my_aggregate",
-    description="Passes when all sub-checks pass.",
+ParentCheck(
+    "my_parent",
+    description="Passes when all child checks pass.",
     depends_on=["contains_charm"],   # pre-conditions
-    aggregates=["my_check", "other_check"],
 )
 ```
 
-The aggregate will appear as a column in the overview Markdown table.
+Then set `parent = "my_parent"` on each leaf check that should belong to it.
+The parent check result is derived dynamically from all registered checks whose
+`parent` attribute equals `"my_parent"`.
+
+The parent check appears as a column in the overview Markdown table.
 Set `hidden=True` to suppress it from the overview.

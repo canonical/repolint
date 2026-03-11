@@ -18,10 +18,8 @@ from repolint.report import (
 )
 
 
-def _mock_check(name, description="desc", hidden=False, aggregates=None):
-    return SimpleNamespace(
-        name=name, description=description, hidden=hidden, aggregates=aggregates or []
-    )
+def _mock_check(name, description="desc", hidden=False, parent=""):
+    return SimpleNamespace(name=name, description=description, hidden=hidden, parent=parent)
 
 
 # ---------------------------------------------------------------------------
@@ -59,13 +57,6 @@ class TestRenderMarkdownDetails:
         md = render_markdown_details("canonical/my-charm", results)
         # Should not raise and should still produce heading
         assert "# canonical/my-charm" in md
-
-    def test_aggregate_label_shown(self):
-        results = {
-            "github": CheckResult(CheckStatus.COMPLIANT, "All subchecks are compliant."),
-        }
-        md = render_markdown_details("canonical/my-charm", results)
-        assert "(aggregate)" in md
 
 
 # ---------------------------------------------------------------------------
