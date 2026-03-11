@@ -29,7 +29,10 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         type=Path,
         default=DEFAULT_CONFIG_FILE,
-        help=f"Path to the repolint YAML config file (default: {DEFAULT_CONFIG_FILE}).",
+        help=(
+            f"Path to the repolint YAML config file (default: {DEFAULT_CONFIG_FILE}). "
+            "Optional when --query is provided."
+        ),
     )
     parser.add_argument(
         "--query",
@@ -52,7 +55,11 @@ def main() -> None:
 
     try:
         config = load_config(config_path)
-    except (FileNotFoundError, ValueError) as exc:
+    except FileNotFoundError as exc:
+        if args.query is None:
+            parser.error(str(exc))
+        config = {}
+    except ValueError as exc:
         parser.error(str(exc))
 
     configure_checks(config.get("checks", {}))

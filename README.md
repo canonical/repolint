@@ -88,8 +88,8 @@ repolint [--config PATH]
 
 | Option | Default | Description |
 |---|---|---|
-| `--config PATH` | `repolint.yaml` | Path to the YAML configuration file |
-| `--query QUERY` | _(none)_ | GitHub search query; results merged with config repositories |
+| `--config PATH` | `repolint.yaml` | Path to the YAML configuration file. Optional when `--query` is used. |
+| `--query QUERY` | _(none)_ | GitHub search query; results merged with config repositories. Archived repos are excluded automatically. |
 
 ### Examples
 
@@ -103,10 +103,10 @@ repolint --config ~/my-repos.yaml
 # Use a config file in another directory
 repolint --config /path/to/project/repolint.yaml
 
-# Pass a GitHub search query directly (merged with config repositories)
+# Pass a GitHub search query directly — no config file needed
 repolint --query "org:canonical topic:platform-engineering topic:squad-emea"
 
-# Combine a query with a config file
+# Combine a query with a config file (results merged, duplicates removed)
 repolint --config ~/my-repos.yaml --query "org:canonical topic:platform-engineering"
 ```
 
