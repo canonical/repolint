@@ -12,6 +12,8 @@ class ProductTopicCheck(Check):
     """Check that the repository has a product-xxx topic."""
 
     name = "product_topic"
+    depends_on = ["pfe_topic"]  # noqa: RUF012
+    hidden = True
     description = "Repository has a product-xxx topic. To fix it, add the topic via canonical-repo-automation."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:

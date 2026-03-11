@@ -9,7 +9,6 @@ from pathlib import Path
 
 DEFAULT_CONFIG_FILE = Path("repolint.yaml")
 REPORTS_PATH = Path("reports/")
-SQUAD_TOPICS = {"squad-apac", "squad-amer", "squad-emea"}
 TMP_DIR = Path(tempfile.gettempdir()) / "repo_clones"
 
 

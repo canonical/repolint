@@ -3,8 +3,6 @@
 
 """Check: all charms use Jubilant for integration testing."""
 
-import subprocess
-
 from repolint.checks._base import Check, CheckResult
 from repolint.config import CheckStatus
 from repolint.utils import clone_repository_locally, find_charmcraft_paths, find_regexp_in_path
@@ -14,14 +12,13 @@ class JubilantCheck(Check):
     """Check that all charms use Jubilant for integration testing."""
 
     name = "jubilant"
+    depends_on = ["contains_charm"]  # noqa: RUF012
+    hidden = True
     description = "Repository uses Jubilant for charm testing."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that all charms use Jubilant for integration testing."""
-        try:
-            local_repo = clone_repository_locally(repo)
-        except subprocess.CalledProcessError as e:
-            return CheckResult(CheckStatus.NOT_COMPLIANT, f"Failed to clone repository: {e}")
+        local_repo = clone_repository_locally(repo)
         expected_conf = "import jubilant"
         found = [
             find_regexp_in_path(charm.parent / "tests" / "integration", pattern=expected_conf)

@@ -8,9 +8,8 @@ import json
 import sys
 from pathlib import Path
 
-from repolint.checks import CheckResult
+from repolint.checks import CheckResult, configure_checks
 from repolint.config import DEFAULT_CONFIG_FILE, REPORTS_PATH
-from repolint.criteria import configure_checks
 from repolint.report import (
     analyze,
     render_markdown_details,

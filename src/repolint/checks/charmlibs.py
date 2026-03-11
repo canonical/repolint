@@ -3,8 +3,6 @@
 
 """Check: repository does not use deprecated operator_libs_linux."""
 
-import subprocess
-
 from repolint.checks._base import Check, CheckResult
 from repolint.config import CheckStatus
 from repolint.utils import clone_repository_locally, find_regexp_in_path
@@ -19,14 +17,12 @@ class CharmLibsCheck(Check):
     """
 
     name = "charmlibs"
+    depends_on = ["contains_charm"]  # noqa: RUF012
     description = "Repository uses charmlibs for shared code."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository does not use deprecated operator_libs_linux."""
-        try:
-            local_repo = clone_repository_locally(repo)
-        except subprocess.CalledProcessError as e:
-            return CheckResult(CheckStatus.NOT_COMPLIANT, f"Failed to clone repository: {e}")
+        local_repo = clone_repository_locally(repo)
         pattern = "from charms.operator_libs_linux"
         if find_regexp_in_path(local_repo, pattern=pattern, recursive=True):
             return CheckResult(

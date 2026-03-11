@@ -3,6 +3,7 @@
 
 """Unit tests for repolint.report."""
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -16,28 +17,11 @@ from repolint.report import (
     render_markdown_overview,
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
-MOCK_CRITERIA = [
-    {"name": "check_a", "description": "First check", "hidden": True},
-    {
-        "name": "check_b",
-        "description": "Second check",
-        "depends_on": ["check_a"],
-    },
-    {
-        "name": "check_c",
-        "description": "Aggregate check",
-        "depends_on": ["check_a"],
-        "aggregates": ["check_a", "check_b"],
-    },
-]
-
-
-def _results(repo: str, data: dict) -> dict:
-    return {repo: data}
+def _mock_check(name, description="desc", hidden=False, aggregates=None):
+    return SimpleNamespace(
+        name=name, description=description, hidden=hidden, aggregates=aggregates or []
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -91,14 +75,11 @@ class TestRenderMarkdownDetails:
 
 class TestRenderMarkdownOverview:
     def test_table_has_header_and_separator(self):
-        # Use minimal mock data that satisfies visible criteria
         with (
-            patch("repolint.report.list_criteria") as mock_lc,
+            patch("repolint.report.list_checks") as mock_lc,
             patch("repolint.report.get_repository_details_filename", return_value="details.md"),
         ):
-            mock_lc.return_value = [
-                {"name": "check_b", "description": "Second check"},
-            ]
+            mock_lc.return_value = [_mock_check("check_b", description="Second check")]
             results = {
                 "canonical/repo-a": {
                     "check_b": CheckResult(CheckStatus.COMPLIANT, ""),
@@ -107,18 +88,15 @@ class TestRenderMarkdownOverview:
             md = render_markdown_overview(results)
 
         lines = md.splitlines()
-        # First line is the header row, second is the separator
         assert lines[0].startswith("|")
         assert "---" in lines[1]
 
     def test_repo_link_present(self):
         with (
-            patch("repolint.report.list_criteria") as mock_lc,
+            patch("repolint.report.list_checks") as mock_lc,
             patch("repolint.report.get_repository_details_filename", return_value="details.md"),
         ):
-            mock_lc.return_value = [
-                {"name": "check_b", "description": "Second check"},
-            ]
+            mock_lc.return_value = [_mock_check("check_b", description="Second check")]
             results = {
                 "canonical/my-charm": {
                     "check_b": CheckResult(CheckStatus.COMPLIANT, ""),
@@ -131,12 +109,10 @@ class TestRenderMarkdownOverview:
 
     def test_missing_criterion_result_raises(self):
         with (
-            patch("repolint.report.list_criteria") as mock_lc,
+            patch("repolint.report.list_checks") as mock_lc,
             patch("repolint.report.get_repository_details_filename", return_value="details.md"),
         ):
-            mock_lc.return_value = [
-                {"name": "check_b", "description": "Second check"},
-            ]
+            mock_lc.return_value = [_mock_check("check_b", description="Second check")]
             results: dict = {
                 "canonical/my-charm": {}  # no check_b entry
             }
@@ -145,12 +121,12 @@ class TestRenderMarkdownOverview:
 
     def test_hidden_criteria_excluded_from_headers(self):
         with (
-            patch("repolint.report.list_criteria") as mock_lc,
+            patch("repolint.report.list_checks") as mock_lc,
             patch("repolint.report.get_repository_details_filename", return_value="details.md"),
         ):
             mock_lc.return_value = [
-                {"name": "hidden_check", "description": "Hidden", "hidden": True},
-                {"name": "visible_check", "description": "Visible"},
+                _mock_check("hidden_check", description="Hidden", hidden=True),
+                _mock_check("visible_check", description="Visible"),
             ]
             results = {
                 "canonical/my-charm": {
@@ -171,35 +147,32 @@ class TestRenderMarkdownOverview:
 
 class TestAnalyzeRepo:
     def test_runs_all_checks(self):
-        with (
-            patch("repolint.report.list_criteria") as mock_lc,
-            patch("repolint.report.get_check_function") as mock_gcf,
-        ):
-            mock_lc.return_value = [
-                {"name": "check_a", "description": "A"},
-                {"name": "check_b", "description": "B", "depends_on": ["check_a"]},
-            ]
-            mock_gcf.return_value = lambda repo, previous_results=None: CheckResult(
-                CheckStatus.COMPLIANT, "ok"
-            )
+        from unittest.mock import MagicMock
+
+        mock_check_a = MagicMock()
+        mock_check_a.name = "check_a"
+        mock_check_a.return_value = CheckResult(CheckStatus.COMPLIANT, "ok")
+        mock_check_b = MagicMock()
+        mock_check_b.name = "check_b"
+        mock_check_b.return_value = CheckResult(CheckStatus.COMPLIANT, "ok")
+        with patch("repolint.report.list_checks") as mock_lc:
+            mock_lc.return_value = [mock_check_a, mock_check_b]
             results = analyze_repo("canonical/test-repo")
 
         assert "check_a" in results
         assert "check_b" in results
 
-        assert "check_a" in results
-        assert "check_b" in results
+    def test_results_keyed_by_check_name(self):
+        from unittest.mock import MagicMock
 
-    def test_raises_when_check_function_missing(self):
-        with (
-            patch("repolint.report.list_criteria") as mock_lc,
-            patch("repolint.report.get_check_function", return_value=None),
-        ):
-            mock_lc.return_value = [
-                {"name": "check_a", "description": "A"},
-            ]
-            with pytest.raises(RuntimeError, match="check_a"):
-                analyze_repo("canonical/test-repo")
+        mock_check_a = MagicMock()
+        mock_check_a.name = "check_a"
+        mock_check_a.return_value = CheckResult(CheckStatus.COMPLIANT, "ok")
+        with patch("repolint.report.list_checks") as mock_lc:
+            mock_lc.return_value = [mock_check_a]
+            results = analyze_repo("canonical/test-repo")
+
+        assert results["check_a"].result == CheckStatus.COMPLIANT
 
 
 # ---------------------------------------------------------------------------

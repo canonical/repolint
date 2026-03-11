@@ -3,8 +3,6 @@
 
 """Check: all Terraform modules use Juju provider v1."""
 
-import subprocess
-
 from repolint.checks._base import Check, CheckResult
 from repolint.config import CheckStatus
 from repolint.utils import clone_repository_locally, find_files_in_path, find_regexp_in_path
@@ -14,14 +12,13 @@ class TfV1Check(Check):
     """Check that all Terraform modules use Juju provider v1."""
 
     name = "tf_v1"
+    depends_on = ["contains_charm"]  # noqa: RUF012
+    hidden = True
     description = "Repository uses Terraform Juju provider v1."
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that all Terraform modules use Juju provider v1."""
-        try:
-            local_repo = clone_repository_locally(repo)
-        except subprocess.CalledProcessError as e:
-            return CheckResult(CheckStatus.NOT_COMPLIANT, f"Failed to clone repository: {e}")
+        local_repo = clone_repository_locally(repo)
         expected_conf = r'juju\s*=\s*\{.*?\bversion\s*=\s*"~> 1\.'
         results = [
             find_regexp_in_path(tf_file.parent, expected_conf)

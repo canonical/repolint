@@ -4,14 +4,18 @@
 """Check: repository has a squad-* GitHub topic."""
 
 from repolint.checks._base import Check, CheckResult
-from repolint.config import SQUAD_TOPICS, CheckStatus
+from repolint.config import CheckStatus
 from repolint.utils import get_repository_topics
+
+SQUAD_TOPICS = {"squad-apac", "squad-amer", "squad-emea"}
 
 
 class SquadTopicCheck(Check):
     """Check that the repository has a squad-xxx topic."""
 
     name = "squad_topic"
+    depends_on = ["pfe_topic"]  # noqa: RUF012
+    hidden = True
     description = (
         "Repository has a squad-xxx topic. To fix it, add the topic via canonical-repo-automation."
     )

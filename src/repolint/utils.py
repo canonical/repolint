@@ -136,17 +136,13 @@ def find_regexp_in_path(path: Path, pattern: str, *, recursive: bool = False) ->
     """Search for a regexp pattern in all files under path.
 
     Note: file contents are read in full so patterns can span multiple lines
-    (re.DOTALL is enabled).
+    (re.DOTALL is enabled). Hidden directories (e.g. ``.git``) are skipped.
     """
     if not (path.exists() and path.is_dir()):
         return False
-    if path.name == ".git":
-        return False
-
-    for file in path.glob("*"):
-        if file.is_dir():
-            if recursive and find_regexp_in_path(file, pattern, recursive=True):
-                return True
+    glob = path.rglob("*") if recursive else path.glob("*")
+    for file in glob:
+        if not file.is_file() or ".git" in file.parts:
             continue
         try:
             content = file.read_text()

@@ -13,6 +13,7 @@ class PfeTopicCheck(Check):
 
     name = "pfe_topic"
     description = "Repository has a platform-engineering topic. To fix it, add the topic via canonical-repo-automation."
+    hidden = True
 
     def run(self, repo: str, previous_results: dict[str, CheckResult]) -> CheckResult:
         """Check that the repository has the 'platform-engineering' topic."""

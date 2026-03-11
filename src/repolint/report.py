@@ -5,8 +5,7 @@
 
 from datetime import datetime
 
-from repolint.checks import CheckResult, get_check_function
-from repolint.criteria import get_criterion_by_name, list_criteria
+from repolint.checks import CheckResult, get_check, list_checks
 from repolint.utils import get_repository_details_filename, sanitize
 
 
@@ -14,12 +13,11 @@ def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
     """Render a detailed per-repository compliance report as Markdown."""
     markdown = f"# {repo}\n\n"
     for criterion_name, value in results.items():
-        criterion_info = get_criterion_by_name(criterion_name)
-        if criterion_info is None:
+        check = get_check(criterion_name)
+        if check is None:
             continue
-        check = get_check_function(criterion_name)
-        aggregate_label = "(aggregate) " if criterion_info.get("aggregates") else ""
-        description = sanitize(check.description if check else "")
+        aggregate_label = "(aggregate) " if check.aggregates else ""
+        description = sanitize(check.description)
         markdown += (
             f"- {aggregate_label}"
             f"<span title='{description}'>{criterion_name}</span>: {value.result}\n"
@@ -32,13 +30,9 @@ def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
 
 def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
     """Render a Markdown table summarising all repositories against visible criteria."""
-    visible_criteria = [c for c in list_criteria() if not c.get("hidden")]
+    visible_checks = [c for c in list_checks() if not c.hidden]
     headers = ["Repository"] + [
-        "<span title='{desc}'>{name}</span>".format(
-            desc=sanitize(check.description if (check := get_check_function(c["name"])) else ""),
-            name=c["name"],
-        )
-        for c in visible_criteria
+        f"<span title='{sanitize(c.description)}'>{c.name}</span>" for c in visible_checks
     ]
     table = [
         "| " + " | ".join(headers) + " |",
@@ -48,10 +42,10 @@ def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
     for repo, repo_results in results.items():
         details_file = get_repository_details_filename(repo)
         row = [f"[{repo}](https://github.com/{repo}) [🔍]({details_file})"]
-        for criterion in visible_criteria:
-            result = repo_results.get(criterion["name"])
+        for check in visible_checks:
+            result = repo_results.get(check.name)
             if result is None:
-                raise RuntimeError(f"Missing result for {criterion['name']} in repository {repo}.")
+                raise RuntimeError(f"Missing result for {check.name} in repository {repo}.")
             msg = sanitize(result.message)
             row.append(f"<span title='{msg}'>{result.result}</span>")
         table.append("| " + " | ".join(row) + " |")
@@ -62,11 +56,8 @@ def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
 def analyze_repo(repo: str) -> dict[str, CheckResult]:
     """Run all compliance checks for a single repository and return the results."""
     repo_results: dict[str, CheckResult] = {}
-    for criterion in list_criteria():
-        check_instance = get_check_function(criterion["name"])
-        if check_instance is None:
-            raise RuntimeError(f"Check function for criterion {criterion['name']!r} not found.")
-        repo_results[criterion["name"]] = check_instance(repo, previous_results=repo_results)
+    for check in list_checks():
+        repo_results[check.name] = check(repo, previous_results=repo_results)
     return repo_results
 
 
