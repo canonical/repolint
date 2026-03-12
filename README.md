@@ -51,6 +51,10 @@ repolint --config /path/to/project/repolint.yaml
 repolint --config ~/my-repos.yaml --query "org:canonical topic:platform-engineering"
 ```
 
+### Sample session
+
+[![asciicast](https://asciinema.org/a/AJbj238wZTOR6SJN.svg)](https://asciinema.org/a/AJbj238wZTOR6SJN)
+
 ### Output
 
 Reports are written to a `reports/` directory in the working directory:
