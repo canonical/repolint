@@ -3,12 +3,11 @@
 
 """Unit tests for repolint.report."""
 
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
-from repolint.checks import CheckResult, list_checks
+from repolint.checks import CheckResult, build_checks_metadata, list_checks
 from repolint.config import CheckStatus
 from repolint.report import (
     analyze,
@@ -18,9 +17,25 @@ from repolint.report import (
     render_report_in_terminal,
 )
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-def _mock_check(name, description="desc", parent=""):
-    return SimpleNamespace(name=name, description=description, parent=parent)
+
+def _make_quality_data(
+    checks_meta: list[dict],
+    repo_results: dict,
+    repo: str = "canonical/my-charm",
+) -> dict:
+    """Build a minimal quality_data dict for use in render function tests."""
+    return {
+        "metadata": {"generated_at": "2026-01-01T00:00:00", "checks": checks_meta},
+        "results": {repo: repo_results},
+    }
+
+
+def _result_dict(status: CheckStatus, message: str = "") -> dict:
+    return {"result": status.value, "message": message}
 
 
 # ---------------------------------------------------------------------------
@@ -30,37 +45,44 @@ def _mock_check(name, description="desc", parent=""):
 
 class TestRenderMarkdownDetails:
     def test_includes_repo_name_as_heading(self):
-        md = render_markdown_details("canonical/my-charm", {})
+        quality_data = _make_quality_data([], {})
+        md = render_markdown_details("canonical/my-charm", quality_data)
         assert "# canonical/my-charm" in md
 
     def test_shows_parent_and_child_checks(self):
-        with patch("repolint.report.list_checks") as mock_lc:
-            mock_lc.return_value = [
-                _mock_check("github_topics", parent="github"),
-                _mock_check("github", parent=""),
-            ]
-            results = {
-                "github": CheckResult(CheckStatus.COMPLIANT, "All subchecks are compliant."),
-                "github_topics": CheckResult(CheckStatus.COMPLIANT, ""),
+        checks_meta = [
+            {
+                "name": "github",
+                "description": "GitHub checks",
+                "children": [{"name": "github_topics", "description": "Topics check"}],
             }
-            md = render_markdown_details("canonical/my-charm", results)
+        ]
+        repo_results = {
+            "github": _result_dict(CheckStatus.COMPLIANT, "All subchecks are compliant."),
+            "github_topics": _result_dict(CheckStatus.COMPLIANT),
+        }
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         assert "github" in md
         assert "github_topics" in md
         assert CheckStatus.COMPLIANT in md
 
     def test_leaf_check_nested_under_parent(self):
-        with patch("repolint.report.list_checks") as mock_lc:
-            mock_lc.return_value = [
-                _mock_check("github_topics", parent="github"),
-                _mock_check("github", parent=""),
-            ]
-            results = {
-                "github": CheckResult(CheckStatus.COMPLIANT, ""),
-                "github_topics": CheckResult(
-                    CheckStatus.NOT_COMPLIANT, "No topic matches pattern."
-                ),
+        checks_meta = [
+            {
+                "name": "github",
+                "description": "desc",
+                "children": [{"name": "github_topics", "description": "topics"}],
             }
-            md = render_markdown_details("canonical/my-charm", results)
+        ]
+        repo_results = {
+            "github": _result_dict(CheckStatus.COMPLIANT),
+            "github_topics": _result_dict(CheckStatus.NOT_COMPLIANT, "No topic matches pattern."),
+        }
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         lines = md.splitlines()
         github_line = next(
             i for i, ln in enumerate(lines) if "github" in ln and "github_topics" not in ln
@@ -71,30 +93,42 @@ class TestRenderMarkdownDetails:
         assert "No topic matches pattern." in md
 
     def test_message_appended_inline(self):
-        with patch("repolint.report.list_checks") as mock_lc:
-            mock_lc.return_value = [
-                _mock_check("github_topics", parent="github"),
-                _mock_check("github", parent=""),
-            ]
-            results = {
-                "github": CheckResult(CheckStatus.NOT_COMPLIANT, "Subcheck(s) failing."),
-                "github_topics": CheckResult(CheckStatus.NOT_COMPLIANT, "No topic matches."),
+        checks_meta = [
+            {
+                "name": "github",
+                "description": "desc",
+                "children": [{"name": "github_topics", "description": "topics"}],
             }
-            md = render_markdown_details("canonical/my-charm", results)
+        ]
+        repo_results = {
+            "github": _result_dict(CheckStatus.NOT_COMPLIANT, "Subcheck(s) failing."),
+            "github_topics": _result_dict(CheckStatus.NOT_COMPLIANT, "No topic matches."),
+        }
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         assert "Subcheck(s) failing." in md
         assert "No topic matches." in md
 
     def test_unknown_criterion_in_results_ignored(self):
-        """Entries in results that are not in list_checks() are simply not rendered."""
-        results = {"unknown_criterion_xyz": CheckResult(CheckStatus.COMPLIANT, "")}
-        md = render_markdown_details("canonical/my-charm", results)
+        """Results not referenced in metadata checks are not rendered."""
+        checks_meta: list[dict] = []
+        repo_results = {"unknown_criterion_xyz": _result_dict(CheckStatus.COMPLIANT)}
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         assert "# canonical/my-charm" in md
         assert "unknown_criterion_xyz" not in md
 
     def test_github_topics_nested_under_github_real_registry(self):
         """Using the real check registry, github_topics must appear nested under github."""
-        results = {c.name: CheckResult(CheckStatus.COMPLIANT, "") for c in list_checks()}
-        md = render_markdown_details("canonical/my-charm", results)
+        all_checks = list_checks()
+        results = {c.name: _result_dict(CheckStatus.COMPLIANT) for c in all_checks}
+        quality_data = {
+            "metadata": {"generated_at": None, "checks": build_checks_metadata()},
+            "results": {"canonical/my-charm": results},
+        }
+        md = render_markdown_details("canonical/my-charm", quality_data)
         lines = md.splitlines()
         github_line = next(
             i
@@ -107,8 +141,13 @@ class TestRenderMarkdownDetails:
 
     def test_internal_group_rendered_with_real_registry(self):
         """_internal group and its children appear in the detailed report."""
-        results = {c.name: CheckResult(CheckStatus.COMPLIANT, "") for c in list_checks()}
-        md = render_markdown_details("canonical/my-charm", results)
+        all_checks = list_checks()
+        results = {c.name: _result_dict(CheckStatus.COMPLIANT) for c in all_checks}
+        quality_data = {
+            "metadata": {"generated_at": None, "checks": build_checks_metadata()},
+            "results": {"canonical/my-charm": results},
+        }
+        md = render_markdown_details("canonical/my-charm", quality_data)
         lines = md.splitlines()
         internal_line = next((i for i, ln in enumerate(lines) if ln == "- _internal"), None)
         assert internal_line is not None, "_internal group must be present"
@@ -118,16 +157,23 @@ class TestRenderMarkdownDetails:
 
     def test_unregistered_parent_group_rendered(self):
         """Checks with an unregistered parent appear under a group bullet."""
-        with patch("repolint.report.list_checks") as mock_lc:
-            mock_lc.return_value = [
-                _mock_check("helper_a", parent="helpers"),
-                _mock_check("helper_b", parent="helpers"),
-            ]
-            results = {
-                "helper_a": CheckResult(CheckStatus.COMPLIANT, "ok"),
-                "helper_b": CheckResult(CheckStatus.NOT_COMPLIANT, "fail"),
+        checks_meta = [
+            {
+                "name": "helpers",
+                "description": None,
+                "children": [
+                    {"name": "helper_a", "description": "a"},
+                    {"name": "helper_b", "description": "b"},
+                ],
             }
-            md = render_markdown_details("canonical/my-charm", results)
+        ]
+        repo_results = {
+            "helper_a": _result_dict(CheckStatus.COMPLIANT, "ok"),
+            "helper_b": _result_dict(CheckStatus.NOT_COMPLIANT, "fail"),
+        }
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         lines = md.splitlines()
         group_line = next((i for i, ln in enumerate(lines) if ln == "- helpers"), None)
         assert group_line is not None, "group bullet must be present"
@@ -141,77 +187,78 @@ class TestRenderMarkdownDetails:
 
 
 class TestRenderMarkdownOverview:
+    def _make_overview_data(self, checks_meta, repo_results_map, details_file="details.md"):
+        return {
+            "metadata": {"generated_at": "2026-01-01T00:00:00", "checks": checks_meta},
+            "results": repo_results_map,
+        }
+
     def test_table_has_header_and_separator(self):
-        with (
-            patch("repolint.report.list_checks") as mock_lc,
-            patch(
-                "repolint.report.get_repository_details_filename",
-                return_value="details.md",
-            ),
+        with patch(
+            "repolint.report.get_repository_details_filename",
+            return_value="details.md",
         ):
-            mock_lc.return_value = [_mock_check("check_b", description="Second check")]
-            results = {
-                "canonical/repo-a": {
-                    "check_b": CheckResult(CheckStatus.COMPLIANT, ""),
-                }
-            }
-            md = render_markdown_overview(results)
+            checks_meta = [{"name": "check_b", "description": "Second check", "children": []}]
+            quality_data = self._make_overview_data(
+                checks_meta,
+                {"canonical/repo-a": {"check_b": _result_dict(CheckStatus.COMPLIANT)}},
+            )
+            md = render_markdown_overview(quality_data)
 
         lines = md.splitlines()
         assert lines[0].startswith("|")
         assert "---" in lines[1]
 
     def test_repo_link_present(self):
-        with (
-            patch("repolint.report.list_checks") as mock_lc,
-            patch(
-                "repolint.report.get_repository_details_filename",
-                return_value="details.md",
-            ),
+        with patch(
+            "repolint.report.get_repository_details_filename",
+            return_value="details.md",
         ):
-            mock_lc.return_value = [_mock_check("check_b", description="Second check")]
-            results = {
-                "canonical/my-charm": {
-                    "check_b": CheckResult(CheckStatus.COMPLIANT, ""),
-                }
-            }
-            md = render_markdown_overview(results)
+            checks_meta = [{"name": "check_b", "description": "Second check", "children": []}]
+            quality_data = self._make_overview_data(
+                checks_meta,
+                {"canonical/my-charm": {"check_b": _result_dict(CheckStatus.COMPLIANT)}},
+            )
+            md = render_markdown_overview(quality_data)
 
         assert "canonical/my-charm" in md
         assert "https://github.com/canonical/my-charm" in md
 
     def test_missing_criterion_result_raises(self):
-        with (
-            patch("repolint.report.list_checks") as mock_lc,
-            patch(
-                "repolint.report.get_repository_details_filename",
-                return_value="details.md",
-            ),
+        with patch(
+            "repolint.report.get_repository_details_filename",
+            return_value="details.md",
         ):
-            mock_lc.return_value = [_mock_check("check_b", description="Second check", parent="")]
-            results: dict = {"canonical/my-charm": {}}  # no check_b entry
+            checks_meta = [{"name": "check_b", "description": "Second check", "children": []}]
+            quality_data = self._make_overview_data(
+                checks_meta,
+                {"canonical/my-charm": {}},  # no check_b entry
+            )
             with pytest.raises(RuntimeError, match="check_b"):
-                render_markdown_overview(results)
+                render_markdown_overview(quality_data)
 
     def test_leaf_checks_excluded_from_headers(self):
-        with (
-            patch("repolint.report.list_checks") as mock_lc,
-            patch(
-                "repolint.report.get_repository_details_filename",
-                return_value="details.md",
-            ),
+        with patch(
+            "repolint.report.get_repository_details_filename",
+            return_value="details.md",
         ):
-            mock_lc.return_value = [
-                _mock_check("parent_check", description="Parent", parent=""),
-                _mock_check("leaf_check", description="Leaf", parent="parent_check"),
-            ]
-            results = {
-                "canonical/my-charm": {
-                    "parent_check": CheckResult(CheckStatus.COMPLIANT, ""),
-                    "leaf_check": CheckResult(CheckStatus.COMPLIANT, ""),
+            checks_meta = [
+                {
+                    "name": "parent_check",
+                    "description": "Parent",
+                    "children": [{"name": "leaf_check", "description": "Leaf"}],
                 }
-            }
-            md = render_markdown_overview(results)
+            ]
+            quality_data = self._make_overview_data(
+                checks_meta,
+                {
+                    "canonical/my-charm": {
+                        "parent_check": _result_dict(CheckStatus.COMPLIANT),
+                        "leaf_check": _result_dict(CheckStatus.COMPLIANT),
+                    }
+                },
+            )
+            md = render_markdown_overview(quality_data)
 
         assert "parent_check" in md
         assert "leaf_check" not in md

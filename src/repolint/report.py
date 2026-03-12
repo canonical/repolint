@@ -9,7 +9,7 @@ from datetime import datetime
 from rich.console import Console
 from rich.markdown import Markdown
 
-from repolint.checks import Check, CheckResult, list_checks
+from repolint.checks import CheckResult, list_checks
 from repolint.utils import get_repository_details_filename, sanitize
 
 _SPAN_TAG_RE = re.compile(r"<span[^>]*>(.*?)</span>", re.DOTALL)
@@ -25,65 +25,72 @@ def render_report_in_terminal(content: str) -> None:
     Console().print(Markdown(plain))
 
 
-def _render_child_checks(
-    group_name: str, all_checks: list[Check], results: dict[str, CheckResult]
-) -> str:
-    """Return Markdown lines for checks whose parent equals *group_name*."""
+def _render_child_checks(children: list[dict], results: dict) -> str:
+    """Return Markdown lines for child checks given a list of child metadata dicts."""
     lines = ""
-    for child in [c for c in all_checks if c.parent == group_name]:
-        child_result = results.get(child.name)
+    for child in children:
+        child_result = results.get(child["name"])
         if child_result is None:
             continue
-        child_desc = sanitize(child.description)
-        line = f"  - <span title='{child_desc}'>{child.name}</span>: {child_result.result}"
-        if child_result.message:
-            line += f" — {child_result.message}"
+        child_desc = sanitize(child["description"] or "")
+        line = f"  - <span title='{child_desc}'>{child['name']}</span>: {child_result['result']}"
+        if child_result["message"]:
+            line += f" — {child_result['message']}"
         lines += line + "\n"
     return lines
 
 
-def render_markdown_details(repo: str, results: dict[str, CheckResult]) -> str:
+def render_markdown_details(repo: str, quality_data: dict) -> str:
     """Render a detailed per-repository compliance report as a nested Markdown list.
 
-    Structure: one top-level bullet per ParentCheck, with its leaf checks
-    indented beneath it.  Checks whose parent is not a registered check (e.g.
-    the ``_internal`` helper group) are rendered as additional sections at the
-    end of the report.
+    *quality_data* is the full quality JSON structure (``{"metadata": …,
+    "results": …}``).  Structure: one top-level bullet per registered parent
+    check, with its leaf checks indented beneath it.  Unregistered helper
+    groups (e.g. ``_internal``) appear at the end without their own result.
     """
-    all_checks = list_checks()
-    registered_names = {c.name for c in all_checks}
+    checks_meta: list[dict] = quality_data["metadata"]["checks"]
+    repo_results: dict = quality_data["results"][repo]
 
     markdown = f"# {repo}\n\n"
 
-    for parent in [c for c in all_checks if not c.parent]:
-        parent_result = results.get(parent.name)
-        if parent_result is None:
-            continue
-        parent_desc = sanitize(parent.description)
-        line = f"- <span title='{parent_desc}'>{parent.name}</span>: {parent_result.result}"
-        if parent_result.message:
-            line += f" — {parent_result.message}"
-        markdown += line + "\n"
-        markdown += _render_child_checks(parent.name, all_checks, results)
-        markdown += "\n"
+    for check_group in checks_meta:
+        group_name = check_group["name"]
+        group_result = repo_results.get(group_name)
 
-    # Render unregistered parent groups (e.g. "_internal").
-    unregistered_parents = sorted(
-        {c.parent for c in all_checks if c.parent and c.parent not in registered_names}
-    )
-    for group_name in unregistered_parents:
-        markdown += f"- {group_name}\n"
-        markdown += _render_child_checks(group_name, all_checks, results)
+        if group_result is not None:
+            # Registered parent — renders its own result line.
+            group_desc = sanitize(check_group["description"] or "")
+            line = f"- <span title='{group_desc}'>{group_name}</span>: {group_result['result']}"
+            if group_result["message"]:
+                line += f" — {group_result['message']}"
+            markdown += line + "\n"
+        else:
+            # Unregistered helper group (e.g. _internal) — no result of its own.
+            markdown += f"- {group_name}\n"
+
+        markdown += _render_child_checks(check_group["children"], repo_results)
         markdown += "\n"
 
     return markdown
 
 
-def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
-    """Render a Markdown table summarising all repositories against visible criteria."""
-    visible_checks = [c for c in list_checks() if not c.parent]
+def render_markdown_overview(quality_data: dict) -> str:
+    """Render a Markdown table summarising all repositories against visible criteria.
+
+    *quality_data* is the full quality JSON structure (``{"metadata": …,
+    "results": …}``).  Only registered parent checks (those that have a result
+    entry for each repository) appear as table columns.
+    """
+    checks_meta: list[dict] = quality_data["metadata"]["checks"]
+    results: dict = quality_data["results"]
+
+    # Visible checks are registered parent checks — they always have a description
+    # string.  Unregistered helper groups (e.g. _internal) carry description=None.
+    visible_checks = [c for c in checks_meta if c["description"] is not None]
+
     headers = ["Repository"] + [
-        f"<span title='{sanitize(c.description)}'>{c.name}</span>" for c in visible_checks
+        f"<span title='{sanitize(c['description'] or '')}'>{c['name']}</span>"
+        for c in visible_checks
     ]
     table = [
         "| " + " | ".join(headers) + " |",
@@ -94,11 +101,11 @@ def render_markdown_overview(results: dict[str, dict[str, CheckResult]]) -> str:
         details_file = get_repository_details_filename(repo)
         row = [f"[{repo}](https://github.com/{repo}) [🔍]({details_file})"]
         for check in visible_checks:
-            result = repo_results.get(check.name)
+            result = repo_results.get(check["name"])
             if result is None:
-                raise RuntimeError(f"Missing result for {check.name} in repository {repo}.")
-            msg = sanitize(result.message)
-            row.append(f"<span title='{msg}'>{result.result}</span>")
+                raise RuntimeError(f"Missing result for {check['name']} in repository {repo}.")
+            msg = sanitize(result["message"])
+            row.append(f"<span title='{msg}'>{result['result']}</span>")
         table.append("| " + " | ".join(row) + " |")
 
     return "\n".join(table) + "\n\nLast updated: " + datetime.now().isoformat()

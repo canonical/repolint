@@ -7,9 +7,10 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
-from repolint.checks import CheckResult, configure_checks
+from repolint.checks import build_checks_metadata, configure_checks
 from repolint.config import DEFAULT_CONFIG_FILE, DEFAULT_REPORTS_DIR
 from repolint.report import (
     analyze,
@@ -78,6 +79,36 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_quality_data(json_file: Path, repositories: list[str]) -> dict:
+    """Return the quality data dict, loading from cache or running analysis."""
+    if json_file.exists():
+        print(f"WARNING: using cached results, rm {json_file} to re-analyze.")
+        with json_file.open() as fh:
+            raw = json.load(fh)
+        if "results" in raw:
+            return raw
+        # Legacy format (flat dict without metadata wrapper) — reconstruct.
+        return {
+            "metadata": {"generated_at": None, "checks": build_checks_metadata()},
+            "results": raw,
+        }
+
+    results = analyze(repositories)
+    quality_data = {
+        "metadata": {
+            "generated_at": datetime.now().isoformat(),
+            "checks": build_checks_metadata(),
+        },
+        "results": {
+            repo: {k: v.to_dict() for k, v in repo_results.items()}
+            for repo, repo_results in results.items()
+        },
+    }
+    with json_file.open(mode="w") as fh:
+        json.dump(quality_data, fh, indent=2)
+    return quality_data
+
+
 def main() -> None:
     """Entry point for the repolint CLI."""
     parser = _build_parser()
@@ -119,35 +150,17 @@ def main() -> None:
     json_file = reports_dir / f"{args.output}.json"
     markdown_file = reports_dir / f"{args.output}.md"
 
-    if json_file.exists():
-        print(f"WARNING: using cached results, rm {json_file} to re-analyze.")
-        with json_file.open() as fh:
-            raw = json.load(fh)
-        results = {
-            repo: {k: CheckResult.from_dict(v) for k, v in repo_results.items()}
-            for repo, repo_results in raw.items()
-        }
-    else:
-        results = analyze(repositories)
-        with json_file.open(mode="w") as fh:
-            json.dump(
-                {
-                    repo: {k: v.to_dict() for k, v in repo_results.items()}
-                    for repo, repo_results in results.items()
-                },
-                fh,
-                indent=2,
-            )
+    quality_data = _load_quality_data(json_file, repositories)
 
     try:
-        markdown_file.write_text(render_markdown_overview(results))
+        markdown_file.write_text(render_markdown_overview(quality_data))
     except AttributeError:
         print(f"Failed to render markdown table from {json_file}, consider removing the cache.")
         sys.exit(1)
 
-    for repo, repo_results in results.items():
+    for repo in quality_data["results"]:
         details_file = reports_dir / get_repository_details_filename(repo)
-        details_file.write_text(render_markdown_details(repo, repo_results))
+        details_file.write_text(render_markdown_details(repo, quality_data))
 
     print(f"Reports written to {reports_dir}/")
 

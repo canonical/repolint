@@ -194,6 +194,42 @@ class ParentCheck(Check):
         return CheckResult(CheckStatus.COMPLIANT, "All subchecks are compliant.")
 
 
+def build_checks_metadata() -> list[dict]:
+    """Return a list of check groups with their children for use in JSON metadata.
+
+    Each entry has ``name``, ``description``, and ``children`` (a list of
+    ``{"name": ..., "description": ...}`` dicts).  Registered parent checks
+    appear first; unregistered helper groups (e.g. ``_internal``) follow with
+    ``description`` set to ``None``.
+    """
+    all_checks = list_checks()
+    registered_names = {c.name for c in all_checks}
+    groups: list[dict[str, object]] = []
+
+    for parent in [c for c in all_checks if not c.parent]:
+        children = [
+            {"name": c.name, "description": c.description}
+            for c in all_checks
+            if c.parent == parent.name
+        ]
+        groups.append(
+            {"name": parent.name, "description": parent.description, "children": children}
+        )
+
+    unregistered = sorted(
+        {c.parent for c in all_checks if c.parent and c.parent not in registered_names}
+    )
+    for group_name in unregistered:
+        children = [
+            {"name": c.name, "description": c.description}
+            for c in all_checks
+            if c.parent == group_name
+        ]
+        groups.append({"name": group_name, "description": None, "children": children})
+
+    return groups
+
+
 def get_check(name: str) -> "Check | None":
     """Return the registered Check instance for a given name, or None."""
     return _REGISTRY.get(name)

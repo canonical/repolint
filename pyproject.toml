@@ -52,6 +52,7 @@ unit = [
   "coverage[toml]",
   "pyyaml",
   "pytest",
+  "rich>=13",
 ]
 coverage-report = [
   "coverage[toml]",
@@ -185,6 +186,7 @@ deps =
     coverage[toml]
     pyyaml
     pytest
+    rich>=13
 commands =
     coverage run --source={toxinidir}/src -m pytest {toxinidir}/tests/unit -v --tb native -s {posargs}
     coverage report
