@@ -16,13 +16,7 @@ are not, and why.
 Install directly from this repository using `uv`:
 
 ```bash
-uv add git+https://github.com/canonical/repolint
-```
-
-Or with pip:
-
-```bash
-pip install git+https://github.com/canonical/repolint
+uv tool install git+ssh://git@github.com/canonical/repolint.git
 ```
 
 ## Usage
@@ -66,7 +60,7 @@ Reports are written to a `reports/` directory in the working directory:
 | `reports/quality.md` | Markdown table — one row per repository, one column per visible check |
 | `reports/quality.json` | Raw JSON results for all checks |
 
-> **Tip:** Preview Markdown locally with `pip install grip && grip reports/quality.md`
+> **Tip:** Preview Markdown locally with `repolint --show-report [path-to-markdown]`
 
 ## Configuration
 
