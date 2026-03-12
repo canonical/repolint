@@ -17,7 +17,6 @@ from repolint.report import (
     render_report_in_terminal,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -62,7 +61,9 @@ class TestRenderMarkdownDetails:
             "github": _result_dict(CheckStatus.COMPLIANT, "All subchecks are compliant."),
             "github_topics": _result_dict(CheckStatus.COMPLIANT),
         }
-        md = render_markdown_details("canonical/my-charm", _make_quality_data(checks_meta, repo_results))
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         assert "github" in md
         assert "github_topics" in md
         assert CheckStatus.COMPLIANT in md
@@ -79,7 +80,9 @@ class TestRenderMarkdownDetails:
             "github": _result_dict(CheckStatus.COMPLIANT),
             "github_topics": _result_dict(CheckStatus.NOT_COMPLIANT, "No topic matches pattern."),
         }
-        md = render_markdown_details("canonical/my-charm", _make_quality_data(checks_meta, repo_results))
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         lines = md.splitlines()
         github_line = next(
             i for i, ln in enumerate(lines) if "github" in ln and "github_topics" not in ln
@@ -101,7 +104,9 @@ class TestRenderMarkdownDetails:
             "github": _result_dict(CheckStatus.NOT_COMPLIANT, "Subcheck(s) failing."),
             "github_topics": _result_dict(CheckStatus.NOT_COMPLIANT, "No topic matches."),
         }
-        md = render_markdown_details("canonical/my-charm", _make_quality_data(checks_meta, repo_results))
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         assert "Subcheck(s) failing." in md
         assert "No topic matches." in md
 
@@ -109,7 +114,9 @@ class TestRenderMarkdownDetails:
         """Results not referenced in metadata checks are not rendered."""
         checks_meta: list[dict] = []
         repo_results = {"unknown_criterion_xyz": _result_dict(CheckStatus.COMPLIANT)}
-        md = render_markdown_details("canonical/my-charm", _make_quality_data(checks_meta, repo_results))
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         assert "# canonical/my-charm" in md
         assert "unknown_criterion_xyz" not in md
 
@@ -164,7 +171,9 @@ class TestRenderMarkdownDetails:
             "helper_a": _result_dict(CheckStatus.COMPLIANT, "ok"),
             "helper_b": _result_dict(CheckStatus.NOT_COMPLIANT, "fail"),
         }
-        md = render_markdown_details("canonical/my-charm", _make_quality_data(checks_meta, repo_results))
+        md = render_markdown_details(
+            "canonical/my-charm", _make_quality_data(checks_meta, repo_results)
+        )
         lines = md.splitlines()
         group_line = next((i for i, ln in enumerate(lines) if ln == "- helpers"), None)
         assert group_line is not None, "group bullet must be present"
@@ -372,4 +381,3 @@ class TestRenderReportInTerminal:
         captured = capsys.readouterr()
         assert "text" in captured.out
         assert "<span" not in captured.out
-

@@ -436,6 +436,7 @@ unit = [
     { name = "coverage" },
     { name = "pytest" },
     { name = "pyyaml" },
+    { name = "rich" },
 ]
 
 [package.metadata]
@@ -461,6 +462,7 @@ unit = [
     { name = "coverage", extras = ["toml"] },
     { name = "pytest" },
     { name = "pyyaml" },
+    { name = "rich", specifier = ">=13" },
 ]
 
 [[package]]

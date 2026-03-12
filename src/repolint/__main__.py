@@ -79,6 +79,36 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_quality_data(json_file: Path, repositories: list[str]) -> dict:
+    """Return the quality data dict, loading from cache or running analysis."""
+    if json_file.exists():
+        print(f"WARNING: using cached results, rm {json_file} to re-analyze.")
+        with json_file.open() as fh:
+            raw = json.load(fh)
+        if "results" in raw:
+            return raw
+        # Legacy format (flat dict without metadata wrapper) — reconstruct.
+        return {
+            "metadata": {"generated_at": None, "checks": build_checks_metadata()},
+            "results": raw,
+        }
+
+    results = analyze(repositories)
+    quality_data = {
+        "metadata": {
+            "generated_at": datetime.now().isoformat(),
+            "checks": build_checks_metadata(),
+        },
+        "results": {
+            repo: {k: v.to_dict() for k, v in repo_results.items()}
+            for repo, repo_results in results.items()
+        },
+    }
+    with json_file.open(mode="w") as fh:
+        json.dump(quality_data, fh, indent=2)
+    return quality_data
+
+
 def main() -> None:
     """Entry point for the repolint CLI."""
     parser = _build_parser()
@@ -120,32 +150,7 @@ def main() -> None:
     json_file = reports_dir / f"{args.output}.json"
     markdown_file = reports_dir / f"{args.output}.md"
 
-    if json_file.exists():
-        print(f"WARNING: using cached results, rm {json_file} to re-analyze.")
-        with json_file.open() as fh:
-            raw = json.load(fh)
-        if "results" in raw:
-            quality_data = raw
-        else:
-            # Legacy format (flat dict without metadata wrapper) — reconstruct.
-            quality_data = {
-                "metadata": {"generated_at": None, "checks": build_checks_metadata()},
-                "results": raw,
-            }
-    else:
-        results = analyze(repositories)
-        quality_data = {
-            "metadata": {
-                "generated_at": datetime.now().isoformat(),
-                "checks": build_checks_metadata(),
-            },
-            "results": {
-                repo: {k: v.to_dict() for k, v in repo_results.items()}
-                for repo, repo_results in results.items()
-            },
-        }
-        with json_file.open(mode="w") as fh:
-            json.dump(quality_data, fh, indent=2)
+    quality_data = _load_quality_data(json_file, repositories)
 
     try:
         markdown_file.write_text(render_markdown_overview(quality_data))

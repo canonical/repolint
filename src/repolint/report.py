@@ -124,4 +124,3 @@ def analyze(repositories: list[str]) -> dict[str, dict[str, CheckResult]]:
     print("Analyzing the following repositories:")
     print("\n".join(sorted(repositories)))
     return {repo: analyze_repo(repo) for repo in sorted(repositories)}
-
