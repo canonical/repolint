@@ -17,6 +17,7 @@ classifiers = [
 # and the 'gh' CLI tool available in the execution environment.
 dependencies = [
     "pyyaml>=6.0.3",
+    "rich>=13",
 ]
 
 [project.scripts]

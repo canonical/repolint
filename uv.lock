@@ -404,10 +404,11 @@ wheels = [
 
 [[package]]
 name = "repolint"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },
+    { name = "rich" },
 ]
 
 [package.dev-dependencies]
@@ -438,7 +439,10 @@ unit = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyyaml", specifier = ">=6.0.3" }]
+requires-dist = [
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "rich", specifier = ">=13" },
+]
 
 [package.metadata.requires-dev]
 coverage-report = [{ name = "coverage", extras = ["toml"] }]

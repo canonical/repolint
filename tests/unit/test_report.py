@@ -15,6 +15,7 @@ from repolint.report import (
     analyze_repo,
     render_markdown_details,
     render_markdown_overview,
+    render_report_in_terminal,
 )
 
 
@@ -103,6 +104,35 @@ class TestRenderMarkdownDetails:
         topics_line = next(i for i, ln in enumerate(lines) if "github_topics" in ln)
         assert topics_line > github_line, "github_topics must appear after github parent"
         assert lines[topics_line].startswith("  "), "github_topics must be indented under github"
+
+    def test_internal_group_rendered_with_real_registry(self):
+        """_internal group and its children appear in the detailed report."""
+        results = {c.name: CheckResult(CheckStatus.COMPLIANT, "") for c in list_checks()}
+        md = render_markdown_details("canonical/my-charm", results)
+        lines = md.splitlines()
+        internal_line = next((i for i, ln in enumerate(lines) if ln == "- _internal"), None)
+        assert internal_line is not None, "_internal group must be present"
+        child_lines = [ln for ln in lines[internal_line + 1 :] if ln.startswith("  - ")]
+        assert any("contains_charm" in ln for ln in child_lines)
+        assert any("contains_k8s_charm" in ln for ln in child_lines)
+
+    def test_unregistered_parent_group_rendered(self):
+        """Checks with an unregistered parent appear under a group bullet."""
+        with patch("repolint.report.list_checks") as mock_lc:
+            mock_lc.return_value = [
+                _mock_check("helper_a", parent="helpers"),
+                _mock_check("helper_b", parent="helpers"),
+            ]
+            results = {
+                "helper_a": CheckResult(CheckStatus.COMPLIANT, "ok"),
+                "helper_b": CheckResult(CheckStatus.NOT_COMPLIANT, "fail"),
+            }
+            md = render_markdown_details("canonical/my-charm", results)
+        lines = md.splitlines()
+        group_line = next((i for i, ln in enumerate(lines) if ln == "- helpers"), None)
+        assert group_line is not None, "group bullet must be present"
+        assert any("helper_a" in ln for ln in lines[group_line + 1 :])
+        assert any("helper_b" in ln for ln in lines[group_line + 1 :])
 
 
 # ---------------------------------------------------------------------------
@@ -271,3 +301,36 @@ class TestAnalyze:
             mock_ar.return_value = {}
             results = analyze(repos)
         assert list(results.keys()) == ["canonical/a-repo", "canonical/z-repo"]
+
+
+# ---------------------------------------------------------------------------
+# render_report_in_terminal
+# ---------------------------------------------------------------------------
+
+
+class TestRenderReportInTerminal:
+    def test_strips_span_tags(self, capsys):
+        content = "# Title\n\n<span title='tooltip'>check_name</span>: ✅\n"
+        render_report_in_terminal(content)
+        captured = capsys.readouterr()
+        assert "check_name" in captured.out
+        assert "<span" not in captured.out
+        assert "tooltip" not in captured.out
+
+    def test_renders_heading(self, capsys):
+        render_report_in_terminal("# My Report\n")
+        captured = capsys.readouterr()
+        assert "My Report" in captured.out
+
+    def test_plain_markdown_unchanged(self, capsys):
+        render_report_in_terminal("- item one\n- item two\n")
+        captured = capsys.readouterr()
+        assert "item one" in captured.out
+        assert "item two" in captured.out
+
+    def test_nested_spans_unwrapped(self, capsys):
+        content = "<span title='outer'><span title='inner'>text</span></span>\n"
+        render_report_in_terminal(content)
+        captured = capsys.readouterr()
+        assert "text" in captured.out
+        assert "<span" not in captured.out

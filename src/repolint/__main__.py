@@ -15,6 +15,7 @@ from repolint.report import (
     analyze,
     render_markdown_details,
     render_markdown_overview,
+    render_report_in_terminal,
 )
 from repolint.utils import get_repository_details_filename, load_config, resolve_repositories
 
@@ -60,6 +61,20 @@ def _build_parser() -> argparse.ArgumentParser:
             "Produces NAME.json, NAME.md, and NAME-<repo>-details.md."
         ),
     )
+    parser.add_argument(
+        "--show-report",
+        metavar="FILE",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "Render a Markdown report in the terminal. "
+            "Optionally accepts a path to a specific report file. "
+            "When no file is given the default overview report "
+            "(<output-dir>/<output>.md) is shown. "
+            "Skips repository analysis."
+        ),
+    )
     return parser
 
 
@@ -67,6 +82,16 @@ def main() -> None:
     """Entry point for the repolint CLI."""
     parser = _build_parser()
     args = parser.parse_args()
+
+    if args.show_report is not None:
+        report_path = (
+            Path(args.show_report) if args.show_report else args.output_dir / f"{args.output}.md"
+        )
+        if not report_path.exists():
+            parser.error(f"Report file not found: {report_path}")
+        render_report_in_terminal(report_path.read_text())
+        return
+
     config_path: Path = args.config
 
     try:
