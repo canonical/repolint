@@ -204,7 +204,7 @@ def build_checks_metadata() -> list[dict]:
     """
     all_checks = list_checks()
     registered_names = {c.name for c in all_checks}
-    groups = []
+    groups: list[dict[str, object]] = []
 
     for parent in [c for c in all_checks if not c.parent]:
         children = [
