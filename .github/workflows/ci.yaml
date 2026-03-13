@@ -25,6 +25,15 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uvx --with tox-uv tox -e static
 
+  license-headers:
+    name: License headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: apache/skywalking-eyes/header@main
+        with:
+          config: .licenserc.yaml
+
   unit:
     name: Unit tests
     runs-on: ubuntu-latest

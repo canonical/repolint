@@ -10,6 +10,26 @@ cd repolint
 uv sync --all-groups
 ```
 
+## Pre-commit hooks
+
+The repository ships a `.pre-commit-config.yaml` that runs the same checks as
+CI (codespell, ruff, mypy, bandit, and license-header verification) on every
+commit.
+
+Install the hooks once after cloning:
+
+```bash
+uv tool install pre-commit   # skip if already installed
+pre-commit install
+```
+
+The hooks will now run automatically on `git commit`.  To run them manually
+across all files:
+
+```bash
+pre-commit run --all-files
+```
+
 ## Running checks
 
 ```bash
