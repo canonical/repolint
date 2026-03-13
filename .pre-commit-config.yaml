@@ -1,0 +1,47 @@
+# Copyright 2025 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+repos:
+  - repo: local
+    hooks:
+      - id: codespell
+        name: codespell
+        language: system
+        entry: uvx codespell
+        types: [text]
+
+      - id: ruff
+        name: ruff check
+        language: system
+        entry: uvx ruff check --fix
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        language: system
+        entry: uvx ruff format
+        types: [python]
+
+      - id: mypy
+        name: mypy
+        language: system
+        entry: uvx --python 3.12 --with types-pyyaml --with pyyaml --with pytest --with rich mypy
+        args: ["src/", "tests/"]
+        pass_filenames: false
+
+      - id: bandit
+        name: bandit
+        language: system
+        entry: uvx bandit[toml]
+        args: ["-c", "pyproject.toml", "-ll"]
+        types: [python]
+        files: "^(src|tests)/"
+
+      - id: license-eye
+        name: License headers
+        language: golang
+        entry: license-eye
+        args: ["header", "check"]
+        pass_filenames: false
+        additional_dependencies:
+          - github.com/apache/skywalking-eyes/cmd/license-eye@main
