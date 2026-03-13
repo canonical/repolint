@@ -1,0 +1,19 @@
+header:
+  license:
+    spdx-id: Apache-2.0
+    copyright-owner: Canonical Ltd.
+    pattern: |
+      Copyright \d{4} Canonical Ltd.
+      See LICENSE file for licensing details.
+  paths-ignore:
+    - .github
+    - .gitignore
+    - LICENSE
+    - uv.lock
+    - "*.md"
+    - "*.yaml"
+    - "*.yml"
+    - "*.toml"
+    - "*.cfg"
+    - "*.txt"
+    - "*.json"
