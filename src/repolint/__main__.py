@@ -89,13 +89,14 @@ def _load_quality_data(json_file: Path, repositories: list[str]) -> dict:
             return raw
         # Legacy format (flat dict without metadata wrapper) — reconstruct.
         return {
-            "metadata": {"generated_at": None, "checks": build_checks_metadata()},
+            "metadata": {"schema": "v0", "generated_at": None, "checks": build_checks_metadata()},
             "results": raw,
         }
 
     results = analyze(repositories)
     quality_data = {
         "metadata": {
+            "schema": "v0",
             "generated_at": datetime.now().isoformat(),
             "checks": build_checks_metadata(),
         },
