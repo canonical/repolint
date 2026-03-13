@@ -29,7 +29,7 @@ def _make_quality_data(
 ) -> dict:
     """Build a minimal quality_data dict for use in render function tests."""
     return {
-        "metadata": {"generated_at": "2026-01-01T00:00:00", "checks": checks_meta},
+        "metadata": {"schema": "v0", "generated_at": "2026-01-01T00:00:00", "checks": checks_meta},
         "results": {repo: repo_results},
     }
 
@@ -125,7 +125,7 @@ class TestRenderMarkdownDetails:
         all_checks = list_checks()
         results = {c.name: _result_dict(CheckStatus.COMPLIANT) for c in all_checks}
         quality_data = {
-            "metadata": {"generated_at": None, "checks": build_checks_metadata()},
+            "metadata": {"schema": "v0", "generated_at": None, "checks": build_checks_metadata()},
             "results": {"canonical/my-charm": results},
         }
         md = render_markdown_details("canonical/my-charm", quality_data)
@@ -144,7 +144,7 @@ class TestRenderMarkdownDetails:
         all_checks = list_checks()
         results = {c.name: _result_dict(CheckStatus.COMPLIANT) for c in all_checks}
         quality_data = {
-            "metadata": {"generated_at": None, "checks": build_checks_metadata()},
+            "metadata": {"schema": "v0", "generated_at": None, "checks": build_checks_metadata()},
             "results": {"canonical/my-charm": results},
         }
         md = render_markdown_details("canonical/my-charm", quality_data)
@@ -189,7 +189,11 @@ class TestRenderMarkdownDetails:
 class TestRenderMarkdownOverview:
     def _make_overview_data(self, checks_meta, repo_results_map, details_file="details.md"):
         return {
-            "metadata": {"generated_at": "2026-01-01T00:00:00", "checks": checks_meta},
+            "metadata": {
+                "schema": "v0",
+                "generated_at": "2026-01-01T00:00:00",
+                "checks": checks_meta,
+            },
             "results": repo_results_map,
         }
 
