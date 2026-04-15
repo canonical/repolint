@@ -148,6 +148,7 @@ skip_missing_interpreters = true
 envlist = lint, unit, static, coverage-report
 
 [testenv]
+basepython = python3.12
 setenv =
     PYTHONPATH = {toxinidir}/src
     PY_COLORS = 1
