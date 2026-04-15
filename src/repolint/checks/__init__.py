@@ -14,6 +14,7 @@ from repolint.checks import (  # noqa: F401
     contains_charm,
     contains_k8s_charm,
     github2jira,
+    github_required_checks,
     github_topics,
     jubilant,
     juju4,

@@ -250,6 +250,64 @@ class TestGithubTopicsCheck:
 
 
 # ---------------------------------------------------------------------------
+# GithubRequiredChecksCheck
+# ---------------------------------------------------------------------------
+
+
+class TestGithubRequiredChecksCheck:
+    def _get_check(self):
+        check = get_check("github_required_checks")
+        assert check is not None
+        return check
+
+    def test_required_checks_present_returns_compliant(self):
+        with (
+            patch(
+                "repolint.checks.github_required_checks.get_default_branch", return_value="main"
+            ),
+            patch(
+                "repolint.checks.github_required_checks.get_required_status_checks",
+                return_value=["ci/tests", "lint"],
+            ),
+        ):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+        assert "2" in result.message
+
+    def test_no_branch_protection_returns_not_compliant(self):
+        with (
+            patch(
+                "repolint.checks.github_required_checks.get_default_branch", return_value="main"
+            ),
+            patch(
+                "repolint.checks.github_required_checks.get_required_status_checks",
+                return_value=None,
+            ),
+        ):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "main" in result.message
+
+    def test_protection_without_checks_returns_not_compliant(self):
+        with (
+            patch(
+                "repolint.checks.github_required_checks.get_default_branch", return_value="main"
+            ),
+            patch(
+                "repolint.checks.github_required_checks.get_required_status_checks",
+                return_value=[],
+            ),
+        ):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "main" in result.message
+
+    def test_check_has_github_parent(self):
+        check = self._get_check()
+        assert check.parent == "github"
+
+
+# ---------------------------------------------------------------------------
 # __init_subclass__ enforcement
 # ---------------------------------------------------------------------------
 
