@@ -302,6 +302,24 @@ class TestGithubRequiredChecksCheck:
         assert result.result == CheckStatus.NOT_COMPLIANT
         assert "main" in result.message
 
+    def test_permission_denied_returns_not_eligible(self):
+        from repolint.checks.github_required_checks import BranchProtectionPermissionError
+
+        with (
+            patch(
+                "repolint.checks.github_required_checks.get_default_branch", return_value="main"
+            ),
+            patch(
+                "repolint.checks.github_required_checks.get_required_status_checks",
+                side_effect=BranchProtectionPermissionError(
+                    "Insufficient permissions to read branch protection for 'main'."
+                ),
+            ),
+        ):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_ELIGIBLE
+        assert "permission" in result.message.lower()
+
     def test_check_has_github_parent(self):
         check = self._get_check()
         assert check.parent == "github"

@@ -32,8 +32,16 @@ def get_default_branch(repo: str) -> str:
     return "main"
 
 
+class BranchProtectionPermissionError(Exception):
+    """Raised when the API call to read branch protection is denied (HTTP 403)."""
+
+
 def get_required_status_checks(repo: str, branch: str) -> list[str] | None:
-    """Return the list of required status check contexts for a branch, or None if unprotected."""
+    """Return the required status check contexts for *branch*, or ``None`` if unprotected.
+
+    Returns an empty list when protection is configured but no checks are required.
+    Raises :exc:`BranchProtectionPermissionError` when admin rights are needed.
+    """
     owner, name = repo.split("/", 1)
     cmd = ["gh", "api", f"/repos/{owner}/{name}/branches/{branch}/protection"]
     result = subprocess.run(
@@ -42,6 +50,16 @@ def get_required_status_checks(repo: str, branch: str) -> list[str] | None:
         text=True,
     )
     if result.returncode != 0:
+        stderr = result.stderr or result.stdout
+        try:
+            message = json.loads(stderr).get("message", "")
+        except json.JSONDecodeError:
+            message = stderr.strip()
+        if "403" in (result.stderr + result.stdout) or "Must have admin rights" in message:
+            raise BranchProtectionPermissionError(
+                f"Insufficient permissions to read branch protection for '{branch}'. "
+                "Admin access to the repository is required."
+            )
         return None
     try:
         data = json.loads(result.stdout)
@@ -68,7 +86,10 @@ class GithubRequiredChecksCheck(Check):
     def run(self, repo: str) -> CheckResult:
         """Check that the default branch has at least one required status check."""
         branch = get_default_branch(repo)
-        checks = get_required_status_checks(repo, branch)
+        try:
+            checks = get_required_status_checks(repo, branch)
+        except BranchProtectionPermissionError as exc:
+            return CheckResult(CheckStatus.NOT_ELIGIBLE, str(exc))
         if checks is None:
             return CheckResult(
                 CheckStatus.NOT_COMPLIANT,
