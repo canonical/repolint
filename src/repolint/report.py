@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from repolint.checks import CheckResult, list_checks
+from repolint.config import CheckStatus
 from repolint.utils import get_repository_details_filename, sanitize
 
 _SPAN_TAG_RE = re.compile(r"<span[^>]*>(.*?)</span>", re.DOTALL)
@@ -74,12 +75,15 @@ def render_markdown_details(repo: str, quality_data: dict) -> str:
     return markdown
 
 
-def render_markdown_overview(quality_data: dict) -> str:
+def render_markdown_overview(quality_data: dict, output: str | None = None) -> str:
     """Render a Markdown table summarising all repositories against visible criteria.
 
     *quality_data* is the full quality JSON structure (``{"metadata": …,
     "results": …}``).  Only registered parent checks (those that have a result
     entry for each repository) appear as table columns.
+
+    When *output* is provided, each parent check column header is linked to the
+    corresponding parent check page ``{output}-{check_name}.md``.
     """
     checks_meta: list[dict] = quality_data["metadata"]["checks"]
     results: dict = quality_data["results"]
@@ -88,10 +92,13 @@ def render_markdown_overview(quality_data: dict) -> str:
     # string.  Unregistered helper groups (e.g. _internal) carry description=None.
     visible_checks = [c for c in checks_meta if c["description"] is not None]
 
-    headers = ["Repository"] + [
-        f"<span title='{sanitize(c['description'] or '')}'>{c['name']}</span>"
-        for c in visible_checks
-    ]
+    def _check_header(c: dict) -> str:
+        desc = sanitize(c["description"] or "")
+        if output is not None:
+            return f"<span title='{desc}'>[{c['name']}]({output}-{c['name']}.md)</span>"
+        return f"<span title='{desc}'>{c['name']}</span>"
+
+    headers = ["Repository"] + [_check_header(c) for c in visible_checks]
     table = [
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join(["---"] * len(headers)) + " |",
@@ -109,6 +116,102 @@ def render_markdown_overview(quality_data: dict) -> str:
         table.append("| " + " | ".join(row) + " |")
 
     return "\n".join(table) + "\n\nLast updated: " + datetime.now().isoformat()
+
+
+def render_markdown_parent_check(
+    parent_name: str,
+    parent_description: str,
+    children_meta: list[dict],
+    quality_data: dict,
+    output: str,
+) -> str:
+    """Render a per-parent-check Markdown report across all repositories.
+
+    The report is a table with repos as rows and each subcheck as a column.
+    Each subcheck column header links to the corresponding
+    ``{output}-{subcheck_name}.md`` detail page.
+    """
+    results: dict = quality_data["results"]
+
+    def _subcheck_header(child: dict) -> str:
+        desc = sanitize(child.get("description") or "")
+        return f"<span title='{desc}'>[{child['name']}]({output}-{child['name']}.md)</span>"
+
+    headers = ["Repository"] + [_subcheck_header(c) for c in children_meta]
+    table = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(["---"] * len(headers)) + " |",
+    ]
+
+    for repo, repo_results in results.items():
+        details_file = get_repository_details_filename(repo)
+        row = [f"[{repo}](https://github.com/{repo}) [🔍]({details_file})"]
+        for child in children_meta:
+            result = repo_results.get(child["name"])
+            if result is None:
+                row.append("")
+            else:
+                msg = sanitize(result["message"])
+                row.append(f"<span title='{msg}'>{result['result']}</span>")
+        table.append("| " + " | ".join(row) + " |")
+
+    desc_suffix = f" — {parent_description}" if parent_description else ""
+    markdown = f"# {parent_name}{desc_suffix}\n\n"
+    markdown += "\n".join(table) + "\n"
+    return markdown
+
+
+def render_markdown_subcheck(
+    subcheck_name: str, subcheck_description: str, quality_data: dict
+) -> str:
+    """Render a per-subcheck Markdown report across all repositories.
+
+    The report has three sections — **Failed**, **Passed**, and **Excluded** —
+    each containing a table with a repository column and a single result column
+    for *subcheck_name*.
+    """
+    results: dict = quality_data["results"]
+
+    failed: list[tuple[str, dict]] = []
+    passed: list[tuple[str, dict]] = []
+    excluded: list[tuple[str, dict]] = []
+
+    for repo, repo_results in results.items():
+        result = repo_results.get(subcheck_name)
+        if result is None:
+            continue
+        status = result["result"]
+        if status == CheckStatus.NOT_COMPLIANT:
+            failed.append((repo, result))
+        elif status == CheckStatus.COMPLIANT:
+            passed.append((repo, result))
+        else:
+            excluded.append((repo, result))
+
+    def _make_table(rows: list[tuple[str, dict]]) -> str:
+        if not rows:
+            return "_None._\n"
+        header = f"| Repository | {subcheck_name} |"
+        separator = "| --- | --- |"
+        table_rows = []
+        for repo, result in rows:
+            details_file = get_repository_details_filename(repo)
+            repo_cell = f"[{repo}](https://github.com/{repo}) [🔍]({details_file})"
+            msg = sanitize(result["message"])
+            result_cell = f"<span title='{msg}'>{result['result']}</span>"
+            table_rows.append(f"| {repo_cell} | {result_cell} |")
+        return "\n".join([header, separator, *table_rows]) + "\n"
+
+    desc_suffix = f" — {subcheck_description}" if subcheck_description else ""
+    markdown = f"# {subcheck_name}{desc_suffix}\n\n"
+    markdown += "## Failed\n\n"
+    markdown += _make_table(failed)
+    markdown += "\n## Passed\n\n"
+    markdown += _make_table(passed)
+    markdown += "\n## Excluded\n\n"
+    markdown += _make_table(excluded)
+
+    return markdown
 
 
 def analyze_repo(repo: str) -> dict[str, CheckResult]:
