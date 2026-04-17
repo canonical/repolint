@@ -63,6 +63,12 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        default=False,
+        help="Delete the cached JSON report and re-run the analysis.",
+    )
+    parser.add_argument(
         "--show-report",
         metavar="FILE",
         nargs="?",
@@ -150,6 +156,10 @@ def main() -> None:
 
     json_file = reports_dir / f"{args.output}.json"
     markdown_file = reports_dir / f"{args.output}.md"
+
+    if args.no_cache and json_file.exists():
+        json_file.unlink()
+        print(f"Cache cleared: {json_file}")
 
     quality_data = _load_quality_data(json_file, repositories)
 
