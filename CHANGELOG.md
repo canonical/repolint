@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0] - 2026-04-17
+
+### Added
+
+- Detailed report for each subchecks.
+
+
 ## [0.4.0] - 2026-04-15
 
 ### Added
