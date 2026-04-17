@@ -11,6 +11,22 @@ are not, and why.
 - Python ≥ 3.12
 - [`gh`](https://cli.github.com/) CLI, authenticated (`gh auth login`)
 
+### GitHub token permissions
+
+`repolint` works with a fine-grained personal access token that has **read-only** access to the following permissions:
+
+| Permission | Reason |
+| --- | --- |
+| **Administration** | Read branch-protection rules and required status checks |
+| **Contents** | Read repository file tree and file contents |
+| **Metadata** | Read basic repository metadata and topics |
+
+To use a fine-grained token, authenticate with:
+
+```bash
+gh auth login --with-token <<< "<your-token>"
+```
+
 ## Installation
 
 Install directly from this repository using `uv`:
