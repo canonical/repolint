@@ -16,6 +16,8 @@ from repolint.report import (
     analyze,
     render_markdown_details,
     render_markdown_overview,
+    render_markdown_parent_check,
+    render_markdown_subcheck,
     render_report_in_terminal,
 )
 from repolint.utils import get_repository_details_filename, load_config, resolve_repositories
@@ -61,6 +63,12 @@ def _build_parser() -> argparse.ArgumentParser:
             "Base name for the report files (default: quality). "
             "Produces NAME.json, NAME.md, and NAME-<repo>-details.md."
         ),
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        default=False,
+        help="Delete the cached JSON report and re-run the analysis.",
     )
     parser.add_argument(
         "--show-report",
@@ -149,12 +157,24 @@ def main() -> None:
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     json_file = reports_dir / f"{args.output}.json"
-    markdown_file = reports_dir / f"{args.output}.md"
+
+    if args.no_cache and json_file.exists():
+        json_file.unlink()
+        print(f"Cache cleared: {json_file}")
 
     quality_data = _load_quality_data(json_file, repositories)
+    _write_reports(reports_dir, args.output, quality_data)
+
+    print(f"Reports written to {reports_dir}/")
+
+
+def _write_reports(reports_dir: Path, output: str, quality_data: dict) -> None:
+    """Write all Markdown report files to *reports_dir*."""
+    markdown_file = reports_dir / f"{output}.md"
+    json_file = reports_dir / f"{output}.json"
 
     try:
-        markdown_file.write_text(render_markdown_overview(quality_data))
+        markdown_file.write_text(render_markdown_overview(quality_data, output=output))
     except AttributeError:
         print(f"Failed to render markdown table from {json_file}, consider removing the cache.")
         sys.exit(1)
@@ -163,7 +183,25 @@ def main() -> None:
         details_file = reports_dir / get_repository_details_filename(repo)
         details_file.write_text(render_markdown_details(repo, quality_data))
 
-    print(f"Reports written to {reports_dir}/")
+    for check_group in quality_data["metadata"]["checks"]:
+        if check_group["description"] is None:
+            continue  # skip unregistered helper groups (e.g. _internal)
+        parent_name = check_group["name"]
+        parent_desc = check_group["description"] or ""
+        children = check_group["children"]
+        parent_file = reports_dir / f"{output}-{parent_name}.md"
+        parent_file.write_text(
+            render_markdown_parent_check(parent_name, parent_desc, children, quality_data, output)
+        )
+
+    for check_group in quality_data["metadata"]["checks"]:
+        for child in check_group["children"]:
+            subcheck_name = child["name"]
+            subcheck_desc = child.get("description") or ""
+            subcheck_file = reports_dir / f"{output}-{subcheck_name}.md"
+            subcheck_file.write_text(
+                render_markdown_subcheck(subcheck_name, subcheck_desc, quality_data)
+            )
 
 
 if __name__ == "__main__":

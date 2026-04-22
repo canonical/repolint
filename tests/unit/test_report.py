@@ -14,6 +14,8 @@ from repolint.report import (
     analyze_repo,
     render_markdown_details,
     render_markdown_overview,
+    render_markdown_parent_check,
+    render_markdown_subcheck,
     render_report_in_terminal,
 )
 
@@ -266,6 +268,215 @@ class TestRenderMarkdownOverview:
 
         assert "parent_check" in md
         assert "leaf_check" not in md
+
+    def test_overview_without_output_has_no_links_in_headers(self):
+        with patch(
+            "repolint.report.get_repository_details_filename",
+            return_value="details.md",
+        ):
+            checks_meta = [{"name": "unit_tests", "description": "Unit tests", "children": []}]
+            quality_data = self._make_overview_data(
+                checks_meta,
+                {"canonical/my-charm": {"unit_tests": _result_dict(CheckStatus.COMPLIANT)}},
+            )
+            md = render_markdown_overview(quality_data)
+
+        header_line = md.splitlines()[0]
+        assert "unit_tests" in header_line
+        assert "unit_tests.md" not in header_line
+
+    def test_overview_with_output_links_headers_to_parent_pages(self):
+        with patch(
+            "repolint.report.get_repository_details_filename",
+            return_value="details.md",
+        ):
+            checks_meta = [{"name": "unit_tests", "description": "Unit tests", "children": []}]
+            quality_data = self._make_overview_data(
+                checks_meta,
+                {"canonical/my-charm": {"unit_tests": _result_dict(CheckStatus.COMPLIANT)}},
+            )
+            md = render_markdown_overview(quality_data, output="quality")
+
+        header_line = md.splitlines()[0]
+        assert "quality-unit_tests.md" in header_line
+
+
+# ---------------------------------------------------------------------------
+# render_markdown_parent_check
+# ---------------------------------------------------------------------------
+
+
+class TestRenderMarkdownParentCheck:
+    def _make_data(self, repo_results_map: dict) -> dict:
+        return {
+            "metadata": {"schema": "v0", "generated_at": "2026-01-01T00:00:00", "checks": []},
+            "results": repo_results_map,
+        }
+
+    def test_heading_contains_parent_name_and_description(self):
+        data = self._make_data(
+            {"canonical/my-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)}}
+        )
+        children = [{"name": "ops_testing", "description": "Doesn't use harness."}]
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_parent_check(
+                "unit_tests", "Unit testing.", children, data, "quality"
+            )
+        assert "# unit_tests" in md
+        assert "Unit testing." in md
+
+    def test_subcheck_columns_link_to_subcheck_pages(self):
+        data = self._make_data(
+            {"canonical/my-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)}}
+        )
+        children = [{"name": "ops_testing", "description": "Doesn't use harness."}]
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_parent_check(
+                "unit_tests", "Unit testing.", children, data, "quality"
+            )
+        assert "quality-ops_testing.md" in md
+
+    def test_table_contains_all_repos(self):
+        data = self._make_data(
+            {
+                "canonical/charm-a": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)},
+                "canonical/charm-b": {
+                    "ops_testing": _result_dict(CheckStatus.NOT_COMPLIANT, "harness found")
+                },
+            }
+        )
+        children = [{"name": "ops_testing", "description": ""}]
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_parent_check("unit_tests", "", children, data, "quality")
+        assert "canonical/charm-a" in md
+        assert "canonical/charm-b" in md
+
+    def test_table_has_header_and_separator(self):
+        data = self._make_data(
+            {"canonical/my-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)}}
+        )
+        children = [{"name": "ops_testing", "description": ""}]
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_parent_check("unit_tests", "", children, data, "quality")
+        table_lines = [ln for ln in md.splitlines() if ln.startswith("|")]
+        assert len(table_lines) >= 2
+        assert "---" in table_lines[1]
+
+    def test_repo_link_and_magnifier_present(self):
+        data = self._make_data(
+            {"canonical/my-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)}}
+        )
+        children = [{"name": "ops_testing", "description": ""}]
+        with patch(
+            "repolint.report.get_repository_details_filename",
+            return_value="canonical-my-charm-details.md",
+        ):
+            md = render_markdown_parent_check("unit_tests", "", children, data, "quality")
+        assert "https://github.com/canonical/my-charm" in md
+        assert "🔍" in md
+        assert "canonical-my-charm-details.md" in md
+
+    def test_missing_subcheck_result_renders_empty_cell(self):
+        data = self._make_data({"canonical/my-charm": {}})  # no ops_testing result
+        children = [{"name": "ops_testing", "description": ""}]
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_parent_check("unit_tests", "", children, data, "quality")
+        # Row should still appear; empty cell is allowed
+        assert "canonical/my-charm" in md
+
+
+class TestRenderMarkdownSubcheck:
+    def _make_data(self, repo_results_map: dict) -> dict:
+        return {
+            "metadata": {"schema": "v0", "generated_at": "2026-01-01T00:00:00", "checks": []},
+            "results": repo_results_map,
+        }
+
+    def test_heading_contains_subcheck_name_and_description(self):
+        data = self._make_data(
+            {"canonical/my-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)}}
+        )
+        md = render_markdown_subcheck("ops_testing", "Repository doesn't use harness.", data)
+        assert "# ops_testing" in md
+        assert "Repository doesn't use harness." in md
+
+    def test_heading_no_description(self):
+        data = self._make_data(
+            {"canonical/my-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)}}
+        )
+        md = render_markdown_subcheck("ops_testing", "", data)
+        assert md.startswith("# ops_testing\n")
+        assert " — " not in md.splitlines()[0]
+
+    def test_failed_section_contains_non_compliant_repos(self):
+        data = self._make_data(
+            {
+                "canonical/bad-charm": {
+                    "ops_testing": _result_dict(CheckStatus.NOT_COMPLIANT, "Found harness.")
+                },
+                "canonical/good-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)},
+            }
+        )
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_subcheck("ops_testing", "", data)
+        failed_section = md.split("## Failed")[1].split("##")[0]
+        passed_section = md.split("## Passed")[1].split("##")[0]
+        assert "canonical/bad-charm" in failed_section
+        assert "canonical/good-charm" not in failed_section
+        assert "canonical/good-charm" in passed_section
+
+    def test_excluded_section_contains_not_eligible_repos(self):
+        data = self._make_data(
+            {
+                "canonical/skipped": {
+                    "ops_testing": _result_dict(CheckStatus.NOT_ELIGIBLE, "Not a charm.")
+                }
+            }
+        )
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_subcheck("ops_testing", "", data)
+        excluded_section = md.split("## Excluded")[1]
+        assert "canonical/skipped" in excluded_section
+
+    def test_empty_section_shows_none_placeholder(self):
+        data = self._make_data(
+            {"canonical/my-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)}}
+        )
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_subcheck("ops_testing", "", data)
+        failed_section = md.split("## Failed")[1].split("##")[0]
+        assert "_None._" in failed_section
+
+    def test_table_has_repo_link_and_magnifier(self):
+        data = self._make_data(
+            {"canonical/my-charm": {"ops_testing": _result_dict(CheckStatus.COMPLIANT)}}
+        )
+        with patch(
+            "repolint.report.get_repository_details_filename",
+            return_value="canonical-my-charm-details.md",
+        ):
+            md = render_markdown_subcheck("ops_testing", "", data)
+        assert "https://github.com/canonical/my-charm" in md
+        assert "🔍" in md
+        assert "canonical-my-charm-details.md" in md
+
+    def test_repo_not_in_subcheck_skipped(self):
+        """Repos that have no result for the subcheck are silently skipped."""
+        data = self._make_data(
+            {
+                "canonical/my-charm": {"other_check": _result_dict(CheckStatus.COMPLIANT)},
+            }
+        )
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_subcheck("ops_testing", "", data)
+        assert "canonical/my-charm" not in md
+
+    def test_all_three_section_headers_present(self):
+        data = self._make_data({})
+        md = render_markdown_subcheck("ops_testing", "", data)
+        assert "## Failed" in md
+        assert "## Passed" in md
+        assert "## Excluded" in md
 
 
 # ---------------------------------------------------------------------------
