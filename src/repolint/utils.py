@@ -183,6 +183,34 @@ def clone_repository_locally(repo: str) -> Path:
     return local_path
 
 
+def get_current_repo() -> str | None:
+    """Return the GitHub ``org/repo`` for the current working directory, or *None*.
+
+    Reads the ``origin`` remote URL from git and extracts the repository name.
+    Returns *None* if the CWD is not a git repository, has no ``origin`` remote,
+    or the origin does not point to github.com.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    url = result.stdout.strip()
+    match = re.search(r"github\.com[:/](.+?)(?:\.git)?$", url)
+    if not match:
+        return None
+    repo = match.group(1)
+    # Validate exactly owner/repo (two non-empty segments).
+    parts = repo.split("/")
+    if len(parts) != 2 or not all(parts):
+        return None
+    return repo
+
+
 def find_charmcraft_paths(path: Path) -> list[Path]:
     """Find all charmcraft.yaml files in path, excluding test directories."""
     charmcraft_files = list(path.rglob("charmcraft.yaml"))

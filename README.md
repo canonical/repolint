@@ -38,12 +38,13 @@ uv tool install git+ssh://git@github.com/canonical/repolint.git
 ## Usage
 
 ```bash
-repolint [--config PATH]
+repolint [REPO] [--config PATH] [--query QUERY] ...
 ```
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--config PATH` | `repolint.yaml` | Path to the YAML configuration file. Optional when `--query` is used. |
+| `REPO` | _(none)_ | GitHub repository full name (`owner/repo`). Shorthand for analysing a single repository — no config file needed. Cannot be combined with `--query`. |
+| `--config PATH` | `repolint.yaml` | Path to the YAML configuration file. Optional when `--query` or `REPO` is used. |
 | `--query QUERY` | _(none)_ | GitHub search query; results merged with config repositories. Archived repos are excluded automatically. |
 | `--output NAME` | `quality` | Base name for the summary reports: `NAME.json` and `NAME.md`. Per-repository detail files are always named `<org>-<repo>-details.md`. |
 | `--output-dir DIR` | `reports` | Directory where all report files are written. Created if it does not exist. |
@@ -51,17 +52,20 @@ repolint [--config PATH]
 ### Examples
 
 ```bash
+# Analyse the repository in the current working directory (auto-detected from git remote)
+repolint
+
+# Analyse a specific repository by name — no config file needed
+repolint canonical/my-charm
+
 # Pass a GitHub search query directly — no config file needed
 repolint --query "org:canonical topic:platform-engineering topic:squad-emea"
 
 # Analyse repositories listed in repolint.yaml (current directory)
-repolint
+repolint --config repolint.yaml
 
 # Use a custom configuration file
 repolint --config ~/my-repos.yaml
-
-# Use a config file in another directory
-repolint --config /path/to/project/repolint.yaml
 
 # Combine a query with a config file (results merged, duplicates removed)
 repolint --config ~/my-repos.yaml --query "org:canonical topic:platform-engineering"

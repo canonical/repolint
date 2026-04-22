@@ -169,3 +169,170 @@ class TestParentCheckReportGeneration:
         self._run_main(tmp_path, monkeypatch)
         overview = (tmp_path / "quality.md").read_text()
         assert "quality-unit_tests.md" in overview
+
+
+# ---------------------------------------------------------------------------
+# Positional repo argument and CWD auto-detection shortcuts
+# ---------------------------------------------------------------------------
+
+
+class TestPositionalRepoArg:
+    def _run_main(self, tmp_path, monkeypatch, argv, repos=None):
+        monkeypatch.setattr(sys, "argv", argv)
+        from repolint.__main__ import main
+
+        with (
+            patch("repolint.__main__.load_config", side_effect=FileNotFoundError("no config")),
+            patch("repolint.__main__.configure_checks"),
+            patch(
+                "repolint.__main__.resolve_repositories",
+                return_value=repos or ["canonical/my-charm"],
+            ),
+            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
+            patch("repolint.__main__._write_reports"),
+        ):
+            main()
+
+    def test_positional_repo_adds_to_repositories(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["repolint", "canonical/my-charm"])
+        from repolint.__main__ import main
+
+        captured_config = {}
+
+        def fake_resolve(config, extra_query=None):
+            captured_config.update(config)
+            return ["canonical/my-charm"]
+
+        with (
+            patch("repolint.__main__.load_config", side_effect=FileNotFoundError("no config")),
+            patch("repolint.__main__.configure_checks"),
+            patch("repolint.__main__.resolve_repositories", side_effect=fake_resolve),
+            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
+            patch("repolint.__main__._write_reports"),
+        ):
+            main()
+
+        assert "canonical/my-charm" in captured_config.get("repositories", [])
+
+    def test_positional_repo_does_not_set_query(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["repolint", "canonical/my-charm"])
+        from repolint.__main__ import main
+
+        captured_extra_query = []
+
+        def fake_resolve(config, extra_query=None):
+            captured_extra_query.append(extra_query)
+            return ["canonical/my-charm"]
+
+        with (
+            patch("repolint.__main__.load_config", side_effect=FileNotFoundError("no config")),
+            patch("repolint.__main__.configure_checks"),
+            patch("repolint.__main__.resolve_repositories", side_effect=fake_resolve),
+            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
+            patch("repolint.__main__._write_reports"),
+        ):
+            main()
+
+        assert captured_extra_query == [None]
+
+    def test_invalid_repo_format_exits(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["repolint", "notarepo"])
+        from repolint.__main__ import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 2
+
+    def test_repo_and_query_together_exits(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv", ["repolint", "canonical/my-charm", "--query", "org:canonical"]
+        )
+        from repolint.__main__ import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 2
+
+    def test_repo_and_show_report_together_exits(self, tmp_path, monkeypatch):
+        report = tmp_path / "quality.md"
+        report.write_text("# Report\n")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["repolint", "canonical/my-charm", "--show-report", str(report)],
+        )
+        from repolint.__main__ import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 2
+
+    def test_explicit_missing_config_still_errors(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["repolint", "--config", str(tmp_path / "nonexistent.yaml"), "canonical/my-charm"],
+        )
+        from repolint.__main__ import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 2
+
+
+class TestCwdAutoDetection:
+    def test_cwd_repo_used_when_no_args(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["repolint"])
+        from repolint.__main__ import main
+
+        captured_config = {}
+
+        def fake_resolve(config, extra_query=None):
+            captured_config.update(config)
+            return ["canonical/detected-repo"]
+
+        with (
+            patch("repolint.__main__.load_config", side_effect=FileNotFoundError("no config")),
+            patch("repolint.__main__.configure_checks"),
+            patch("repolint.__main__.get_current_repo", return_value="canonical/detected-repo"),
+            patch("repolint.__main__.resolve_repositories", side_effect=fake_resolve),
+            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
+            patch("repolint.__main__._write_reports"),
+        ):
+            main()
+
+        assert captured_config.get("repositories") == ["canonical/detected-repo"]
+
+    def test_no_cwd_repo_and_no_args_exits(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["repolint"])
+        from repolint.__main__ import main
+
+        with (
+            patch("repolint.__main__.load_config", side_effect=FileNotFoundError("no config")),
+            patch("repolint.__main__.configure_checks"),
+            patch("repolint.__main__.get_current_repo", return_value=None),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main()
+        assert exc_info.value.code == 2
+
+    def test_cwd_not_used_when_query_provided(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["repolint", "--query", "org:canonical"])
+        from repolint.__main__ import main
+
+        mock_get_current = patch("repolint.__main__.get_current_repo")
+
+        with (
+            patch("repolint.__main__.load_config", side_effect=FileNotFoundError("no config")),
+            patch("repolint.__main__.configure_checks"),
+            mock_get_current as mock_cwd,
+            patch(
+                "repolint.__main__.resolve_repositories",
+                return_value=["canonical/my-charm"],
+            ),
+            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
+            patch("repolint.__main__._write_reports"),
+        ):
+            main()
+
+        mock_cwd.assert_not_called()

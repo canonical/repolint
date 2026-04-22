@@ -45,3 +45,10 @@ repos:
         pass_filenames: false
         additional_dependencies:
           - github.com/apache/skywalking-eyes/cmd/license-eye@main
+
+      - id: unit-tests
+        name: unit tests
+        language: system
+        entry: uv run pytest tests/unit/ -q --tb=short
+        pass_filenames: false
+        stages: [pre-push]
