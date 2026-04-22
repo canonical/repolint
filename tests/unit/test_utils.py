@@ -12,6 +12,7 @@ from repolint.utils import (
     find_charmcraft_paths,
     find_files_in_path,
     find_regexp_in_path,
+    get_current_repo,
     get_repository_details_filename,
     get_repository_slug,
     load_config,
@@ -334,3 +335,61 @@ class TestFindCharmcraftPaths:
             (charm_dir / "charmcraft.yaml").write_text("type: charm\n")
         result = find_charmcraft_paths(tmp_path)
         assert len(result) == 2
+
+
+class TestGetCurrentRepo:
+    def _mock_run(self, url: str):
+        """Return a mock for subprocess.run that yields the given git remote URL."""
+        from unittest.mock import MagicMock
+
+        mock = MagicMock()
+        mock.stdout = url + "\n"
+        mock.returncode = 0
+        return mock
+
+    def test_https_url(self):
+        with patch(
+            "subprocess.run",
+            return_value=self._mock_run("https://github.com/canonical/my-repo.git"),
+        ):
+            assert get_current_repo() == "canonical/my-repo"
+
+    def test_https_url_without_git_suffix(self):
+        with patch(
+            "subprocess.run", return_value=self._mock_run("https://github.com/canonical/my-repo")
+        ):
+            assert get_current_repo() == "canonical/my-repo"
+
+    def test_ssh_url(self):
+        with patch(
+            "subprocess.run", return_value=self._mock_run("git@github.com:canonical/my-repo.git")
+        ):
+            assert get_current_repo() == "canonical/my-repo"
+
+    def test_ssh_url_without_git_suffix(self):
+        with patch(
+            "subprocess.run", return_value=self._mock_run("git@github.com:canonical/my-repo")
+        ):
+            assert get_current_repo() == "canonical/my-repo"
+
+    def test_non_github_remote_returns_none(self):
+        with patch(
+            "subprocess.run",
+            return_value=self._mock_run("https://gitlab.com/canonical/my-repo.git"),
+        ):
+            assert get_current_repo() is None
+
+    def test_no_git_repo_returns_none(self):
+        with patch("subprocess.run", side_effect=subprocess.CalledProcessError(128, "git")):
+            assert get_current_repo() is None
+
+    def test_git_not_installed_returns_none(self):
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            assert get_current_repo() is None
+
+    def test_extra_path_segments_returns_none(self):
+        with patch(
+            "subprocess.run",
+            return_value=self._mock_run("https://github.com/canonical/my-repo/extra"),
+        ):
+            assert get_current_repo() is None

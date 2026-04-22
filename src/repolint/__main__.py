@@ -20,7 +20,12 @@ from repolint.report import (
     render_markdown_subcheck,
     render_report_in_terminal,
 )
-from repolint.utils import get_repository_details_filename, load_config, resolve_repositories
+from repolint.utils import (
+    get_current_repo,
+    get_repository_details_filename,
+    load_config,
+    resolve_repositories,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -84,6 +89,17 @@ def _build_parser() -> argparse.ArgumentParser:
             "Skips repository analysis."
         ),
     )
+    parser.add_argument(
+        "repo",
+        nargs="?",
+        default=None,
+        metavar="REPO",
+        help=(
+            "GitHub repository full name (e.g. canonical/my-repo). "
+            "Shorthand for adding the repository to the analysis list. "
+            "Cannot be combined with --query."
+        ),
+    )
     return parser
 
 
@@ -118,10 +134,48 @@ def _load_quality_data(json_file: Path, repositories: list[str]) -> dict:
     return quality_data
 
 
+def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Validate mutually exclusive argument combinations early."""
+    if args.show_report is not None and args.repo is not None:
+        parser.error("Cannot combine positional REPO with --show-report.")
+    if args.repo is not None and args.query is not None:
+        parser.error("Cannot combine positional REPO with --query.")
+    if args.repo is not None:
+        parts = args.repo.split("/")
+        if len(parts) != 2 or not all(parts):
+            parser.error(f"Invalid repository name '{args.repo}'. Expected 'owner/repo' format.")
+
+
+def _apply_repo_shortcuts(
+    args: argparse.Namespace, config: dict, parser: argparse.ArgumentParser
+) -> None:
+    """Apply the positional REPO shortcut or CWD auto-detection to *config* in place."""
+    if args.repo is not None:
+        config.setdefault("repositories", [])
+        if args.repo not in config["repositories"]:
+            config["repositories"].insert(0, args.repo)
+        return
+
+    if args.query is not None or config.get("repositories") or config.get("repository_query"):
+        return
+
+    detected = get_current_repo()
+    if detected:
+        print(f"Auto-detected repository from current directory: {detected}")
+        config["repositories"] = [detected]
+    else:
+        parser.error(
+            "No repositories to analyze. Provide a REPO argument, use --query, "
+            "create a repolint.yaml, or run from a directory with a GitHub remote."
+        )
+
+
 def main() -> None:
     """Entry point for the repolint CLI."""
     parser = _build_parser()
     args = parser.parse_args()
+
+    _validate_args(args, parser)
 
     if args.show_report is not None:
         report_path = (
@@ -137,7 +191,8 @@ def main() -> None:
     try:
         config = load_config(config_path)
     except FileNotFoundError as exc:
-        if args.query is None:
+        if config_path != DEFAULT_CONFIG_FILE:
+            # User explicitly provided a config path — don't silently ignore missing file.
             parser.error(str(exc))
         config = {}
     except ValueError as exc:
@@ -146,6 +201,9 @@ def main() -> None:
     reports_dir: Path = args.output_dir
 
     configure_checks(config.get("checks", {}))
+
+    # Apply shortcuts: positional REPO arg or CWD auto-detection.
+    _apply_repo_shortcuts(args, config, parser)
 
     try:
         repositories = resolve_repositories(config, extra_query=args.query)
