@@ -7,7 +7,9 @@ import argparse
 import json
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
+from importlib.metadata import version
 from pathlib import Path
 
 from repolint.checks import build_checks_metadata, configure_checks
@@ -22,8 +24,10 @@ from repolint.report import (
 )
 from repolint.utils import (
     get_current_repo,
+    get_git_toplevel,
     get_repository_details_filename,
     load_config,
+    local_repo_override,
     resolve_repositories,
 )
 
@@ -32,6 +36,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="repolint",
         description="Generate a repository compliance dashboard for Canonical Platform Engineering.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {version('repolint')}",
     )
     parser.add_argument(
         "--config",
@@ -148,21 +157,26 @@ def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
 
 def _apply_repo_shortcuts(
     args: argparse.Namespace, config: dict, parser: argparse.ArgumentParser
-) -> None:
-    """Apply the positional REPO shortcut or CWD auto-detection to *config* in place."""
+) -> str | None:
+    """Apply the positional REPO shortcut or CWD auto-detection to *config* in place.
+
+    Returns the auto-detected repository name when CWD shortcut mode is
+    activated, or *None* in all other cases.
+    """
     if args.repo is not None:
         config.setdefault("repositories", [])
         if args.repo not in config["repositories"]:
             config["repositories"].insert(0, args.repo)
-        return
+        return None
 
     if args.query is not None or config.get("repositories") or config.get("repository_query"):
-        return
+        return None
 
     detected = get_current_repo()
     if detected:
         print(f"Auto-detected repository from current directory: {detected}")
         config["repositories"] = [detected]
+        return detected
     else:
         parser.error(
             "No repositories to analyze. Provide a REPO argument, use --query, "
@@ -198,12 +212,11 @@ def main() -> None:
     except ValueError as exc:
         parser.error(str(exc))
 
-    reports_dir: Path = args.output_dir
-
     configure_checks(config.get("checks", {}))
 
     # Apply shortcuts: positional REPO arg or CWD auto-detection.
-    _apply_repo_shortcuts(args, config, parser)
+    # Returns the detected repo name when CWD shortcut mode is active.
+    shortcut_repo = _apply_repo_shortcuts(args, config, parser)
 
     try:
         repositories = resolve_repositories(config, extra_query=args.query)
@@ -212,6 +225,15 @@ def main() -> None:
         parser.error(f"Repository query failed: {stderr}")
         return  # unreachable; satisfies type checkers
 
+    if shortcut_repo:
+        _run_shortcut_mode(args, shortcut_repo, repositories)
+    else:
+        _run_standard_mode(args, repositories)
+
+
+def _run_standard_mode(args: argparse.Namespace, repositories: list[str]) -> None:
+    """Run analysis and write reports to the configured output directory."""
+    reports_dir: Path = args.output_dir
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     json_file = reports_dir / f"{args.output}.json"
@@ -224,6 +246,29 @@ def main() -> None:
     _write_reports(reports_dir, args.output, quality_data)
 
     print(f"Reports written to {reports_dir}/")
+
+
+def _run_shortcut_mode(
+    args: argparse.Namespace, shortcut_repo: str, repositories: list[str]
+) -> None:
+    """Run analysis in CWD shortcut mode.
+
+    Uses the current git repository root as the local clone (no network clone
+    needed), writes reports to a temporary directory, and immediately renders
+    the per-repository detail report in the terminal.
+    """
+    repo_root = get_git_toplevel() or Path.cwd()
+
+    with (
+        local_repo_override(shortcut_repo, repo_root),
+        tempfile.TemporaryDirectory(prefix="repolint-") as tmp_str,
+    ):
+        tmp_dir = Path(tmp_str)
+        json_file = tmp_dir / f"{args.output}.json"
+        quality_data = _load_quality_data(json_file, repositories)
+        _write_reports(tmp_dir, args.output, quality_data)
+        details_file = tmp_dir / get_repository_details_filename(shortcut_repo)
+        render_report_in_terminal(details_file.read_text())
 
 
 def _write_reports(reports_dir: Path, output: str, quality_data: dict) -> None:

@@ -5,12 +5,18 @@
 
 import re
 import subprocess
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
+from typing import Generator
 
 import yaml
 
 from repolint.config import TMP_DIR
+
+# Mapping from repo name (owner/repo) to a local directory that should be used
+# instead of cloning.  Populated via :func:`local_repo_override`.
+_local_overrides: dict[str, Path] = {}
 
 
 def sanitize(text: str) -> str:
@@ -26,6 +32,39 @@ def get_repository_slug(repo: str) -> str:
 def get_repository_details_filename(repo: str) -> str:
     """Return the filename of the detailed markdown report for a repository."""
     return f"{get_repository_slug(repo)}-details.md"
+
+
+@contextmanager
+def local_repo_override(repo: str, path: Path) -> Generator[None, None, None]:
+    """Context manager that makes :func:`clone_repository_locally` return *path* for *repo*.
+
+    The override is active only for the duration of the ``with`` block and is
+    always removed on exit, even if an exception occurs.  This keeps the module
+    state clean across test runs and multiple calls to ``main()``.
+    """
+    _local_overrides[repo] = path
+    try:
+        yield
+    finally:
+        _local_overrides.pop(repo, None)
+
+
+def get_git_toplevel() -> Path | None:
+    """Return the top-level directory of the current git repository, or *None*.
+
+    Runs ``git rev-parse --show-toplevel`` so the returned path is always the
+    repository root, regardless of which subdirectory the process started in.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
 
 
 def _validate_repositories(data: dict, config_path: Path) -> None:
@@ -173,7 +212,13 @@ def get_repository_topics(repo: str) -> list[str]:
 
 
 def clone_repository_locally(repo: str) -> Path:
-    """Clone the repository locally (shallow) and return its path."""
+    """Clone the repository locally (shallow) and return its path.
+
+    If a local override has been registered via :func:`local_repo_override`,
+    that path is returned directly without cloning.
+    """
+    if repo in _local_overrides:
+        return _local_overrides[repo]
     local_path = TMP_DIR / repo.replace("/", "_")
     if not local_path.exists():
         subprocess.run(
@@ -211,19 +256,50 @@ def get_current_repo() -> str | None:
     return repo
 
 
+@lru_cache(maxsize=50)
+def _get_git_tracked_files(path: Path) -> frozenset[Path] | None:
+    """Return the set of git-tracked files under *path*, or *None*.
+
+    Runs ``git ls-files`` with *path* as the working directory.  Returns a
+    ``frozenset`` of absolute :class:`~pathlib.Path` objects so callers can do
+    O(1) membership tests.  Returns *None* when *path* is not inside a git
+    repository or ``git`` is not available, allowing callers to fall back to
+    unfiltered scanning.
+
+    Results are cached per directory (up to 50 entries) to avoid repeated
+    subprocess calls when multiple checks scan the same repository.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "ls-files"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=path,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError):
+        return None
+    return frozenset(path / entry for entry in result.stdout.splitlines() if entry)
+
+
 def find_charmcraft_paths(path: Path) -> list[Path]:
     """Find all charmcraft.yaml files in path, excluding test directories."""
+    tracked = _get_git_tracked_files(path)
     charmcraft_files = list(path.rglob("charmcraft.yaml"))
+    if tracked is not None:
+        charmcraft_files = [f for f in charmcraft_files if f in tracked]
     return [f for f in charmcraft_files if "tests" not in str(f.parent)]
 
 
 def find_files_in_path(path: Path, filename: str) -> list[Path]:
     """Find all files with a specific name under the given directory."""
+    if not (path.exists() and path.is_dir()):
+        return []
+    tracked = _get_git_tracked_files(path)
     found_files = []
-    if path.exists() and path.is_dir():
-        for file in path.rglob(filename):
-            if file.is_file():
-                found_files.append(file)
+    for file in path.rglob(filename):
+        if file.is_file() and (tracked is None or file in tracked):
+            found_files.append(file)
     return found_files
 
 
@@ -231,13 +307,21 @@ def find_regexp_in_path(path: Path, pattern: str, *, recursive: bool = False) ->
     """Search for a regexp pattern in all files under path.
 
     Note: file contents are read in full so patterns can span multiple lines
-    (re.DOTALL is enabled). Hidden directories (e.g. ``.git``) are skipped.
+    (re.DOTALL is enabled).  Git-tracked files only are scanned when the path
+    is inside a git repository; otherwise all files are scanned (excluding
+    hidden ``.git`` directories).
     """
     if not (path.exists() and path.is_dir()):
         return False
+    tracked = _get_git_tracked_files(path)
     glob = path.rglob("*") if recursive else path.glob("*")
     for file in glob:
-        if not file.is_file() or ".git" in file.parts:
+        if not file.is_file():
+            continue
+        if tracked is not None:
+            if file not in tracked:
+                continue
+        elif ".git" in file.parts:
             continue
         try:
             content = file.read_text()
