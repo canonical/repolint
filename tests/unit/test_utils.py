@@ -4,7 +4,7 @@
 """Unit tests for repolint.utils."""
 
 import subprocess
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -393,3 +393,142 @@ class TestGetCurrentRepo:
             return_value=self._mock_run("https://github.com/canonical/my-repo/extra"),
         ):
             assert get_current_repo() is None
+
+
+# ---------------------------------------------------------------------------
+# Git-tracked file filtering
+# ---------------------------------------------------------------------------
+
+
+class TestGitTrackedFileFiltering:
+    """Verify that find_* functions skip files not tracked by git."""
+
+    def _make_repo(self, tmp_path):
+        """Create a minimal fake repo with one tracked and one untracked file."""
+        tracked = tmp_path / "tracked.py"
+        untracked = tmp_path / "untracked.py"
+        tracked.write_text("import harness\n")
+        untracked.write_text("import harness\n")
+        return tracked, untracked
+
+    def _mock_ls_files(self, tracked_path):
+        """Return a mock subprocess.run result that echoes the relative filename."""
+        result = MagicMock()
+        result.stdout = tracked_path.name + "\n"
+        result.returncode = 0
+        return result
+
+    # -- find_regexp_in_path --------------------------------------------------
+
+    def test_find_regexp_skips_untracked_file(self, tmp_path):
+        tracked, _untracked = self._make_repo(tmp_path)
+        mock_result = self._mock_ls_files(tracked)
+
+        import repolint.utils as utils_module
+
+        utils_module._get_git_tracked_files.cache_clear()
+        with patch("subprocess.run", return_value=mock_result):
+            found = find_regexp_in_path(tmp_path, "harness", recursive=True)
+
+        assert found  # tracked file still found
+
+    def test_find_regexp_untracked_not_matched(self, tmp_path):
+        _tracked, _untracked = self._make_repo(tmp_path)
+        # Report empty ls-files → nothing is tracked → no match.
+        empty_result = MagicMock()
+        empty_result.stdout = ""
+        empty_result.returncode = 0
+
+        import repolint.utils as utils_module
+
+        utils_module._get_git_tracked_files.cache_clear()
+        with patch("subprocess.run", return_value=empty_result):
+            found = find_regexp_in_path(tmp_path, "harness", recursive=True)
+
+        assert not found  # untracked file skipped → no match
+
+    def test_find_regexp_fallback_when_git_fails(self, tmp_path):
+        _tracked, _untracked = self._make_repo(tmp_path)
+        import repolint.utils as utils_module
+
+        utils_module._get_git_tracked_files.cache_clear()
+        with patch(
+            "subprocess.run",
+            side_effect=subprocess.CalledProcessError(128, "git"),
+        ):
+            found = find_regexp_in_path(tmp_path, "harness", recursive=True)
+
+        assert found  # falls back to full walk → both files scanned
+
+    # -- find_files_in_path ---------------------------------------------------
+
+    def test_find_files_skips_untracked(self, tmp_path):
+        tracked_tf = tmp_path / "versions.tf"
+        untracked_tf = tmp_path / "subdir" / "versions.tf"
+        untracked_tf.parent.mkdir()
+        tracked_tf.write_text("terraform {}")
+        untracked_tf.write_text("terraform {}")
+
+        mock_result = MagicMock()
+        mock_result.stdout = tracked_tf.name + "\n"
+        mock_result.returncode = 0
+
+        import repolint.utils as utils_module
+
+        utils_module._get_git_tracked_files.cache_clear()
+        with patch("subprocess.run", return_value=mock_result):
+            found = find_files_in_path(tmp_path, "versions.tf")
+
+        assert found == [tracked_tf]
+
+    def test_find_files_fallback_when_git_fails(self, tmp_path):
+        tf1 = tmp_path / "a" / "versions.tf"
+        tf1.parent.mkdir()
+        tf1.write_text("terraform {}")
+
+        import repolint.utils as utils_module
+
+        utils_module._get_git_tracked_files.cache_clear()
+        with patch(
+            "subprocess.run",
+            side_effect=subprocess.CalledProcessError(128, "git"),
+        ):
+            found = find_files_in_path(tmp_path, "versions.tf")
+
+        assert found == [tf1]
+
+    # -- find_charmcraft_paths ------------------------------------------------
+
+    def test_find_charmcraft_skips_untracked(self, tmp_path):
+        tracked_cc = tmp_path / "charmcraft.yaml"
+        untracked_cc = tmp_path / "vendor" / "charmcraft.yaml"
+        untracked_cc.parent.mkdir()
+        tracked_cc.write_text("name: my-charm\n")
+        untracked_cc.write_text("name: vendored\n")
+
+        mock_result = MagicMock()
+        mock_result.stdout = tracked_cc.name + "\n"
+        mock_result.returncode = 0
+
+        import repolint.utils as utils_module
+
+        utils_module._get_git_tracked_files.cache_clear()
+        with patch("subprocess.run", return_value=mock_result):
+            found = find_charmcraft_paths(tmp_path)
+
+        assert found == [tracked_cc]
+
+    def test_find_charmcraft_fallback_when_git_fails(self, tmp_path):
+        cc = tmp_path / "charmcraft.yaml"
+        cc.write_text("name: my-charm\n")
+
+        import repolint.utils as utils_module
+
+        utils_module._get_git_tracked_files.cache_clear()
+        with patch(
+            "subprocess.run",
+            side_effect=subprocess.CalledProcessError(128, "git"),
+        ):
+            found = find_charmcraft_paths(tmp_path)
+
+        assert found == [cc]

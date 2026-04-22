@@ -99,7 +99,10 @@ class TestSubcheckReportGeneration:
         from repolint.__main__ import main
 
         with (
-            patch("repolint.__main__.load_config", return_value={}),
+            patch(
+                "repolint.__main__.load_config",
+                return_value={"repositories": ["canonical/my-charm"]},
+            ),
             patch("repolint.__main__.configure_checks"),
             patch(
                 "repolint.__main__.resolve_repositories",
@@ -121,7 +124,10 @@ class TestSubcheckReportGeneration:
         from repolint.__main__ import main
 
         with (
-            patch("repolint.__main__.load_config", return_value={}),
+            patch(
+                "repolint.__main__.load_config",
+                return_value={"repositories": ["canonical/my-charm"]},
+            ),
             patch("repolint.__main__.configure_checks"),
             patch(
                 "repolint.__main__.resolve_repositories",
@@ -147,7 +153,10 @@ class TestParentCheckReportGeneration:
         from repolint.__main__ import main
 
         with (
-            patch("repolint.__main__.load_config", return_value={}),
+            patch(
+                "repolint.__main__.load_config",
+                return_value={"repositories": ["canonical/my-charm"]},
+            ),
             patch("repolint.__main__.configure_checks"),
             patch(
                 "repolint.__main__.resolve_repositories",
@@ -296,8 +305,7 @@ class TestCwdAutoDetection:
             patch("repolint.__main__.configure_checks"),
             patch("repolint.__main__.get_current_repo", return_value="canonical/detected-repo"),
             patch("repolint.__main__.resolve_repositories", side_effect=fake_resolve),
-            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
-            patch("repolint.__main__._write_reports"),
+            patch("repolint.__main__._run_shortcut_mode"),
         ):
             main()
 
@@ -336,3 +344,94 @@ class TestCwdAutoDetection:
             main()
 
         mock_cwd.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# CWD shortcut mode — temp dir and terminal report rendering
+# ---------------------------------------------------------------------------
+
+_MINIMAL_QUALITY_DATA_DETECTED = {
+    "metadata": {
+        "schema": "v0",
+        "generated_at": "2026-01-01T00:00:00",
+        "checks": [
+            {
+                "name": "unit_tests",
+                "description": "Unit testing best practices.",
+                "children": [{"name": "ops_testing", "description": "Doesn't use harness."}],
+            }
+        ],
+    },
+    "results": {
+        "canonical/detected-repo": {
+            "ops_testing": {"result": "✅", "message": ""},
+            "unit_tests": {"result": "✅", "message": "All subchecks are compliant."},
+        }
+    },
+}
+
+
+class TestShortcutMode:
+    """Tests for the CWD auto-detection shortcut mode."""
+
+    def _run_shortcut(self, monkeypatch, tmp_path, *, render_mock=None):
+        """Helper that runs main() in shortcut mode and returns mocked render calls."""
+        monkeypatch.setattr(sys, "argv", ["repolint"])
+        from repolint.__main__ import main
+
+        render_calls = []
+
+        def capture_render(content):
+            render_calls.append(content)
+
+        with (
+            patch("repolint.__main__.load_config", side_effect=FileNotFoundError("no config")),
+            patch("repolint.__main__.configure_checks"),
+            patch("repolint.__main__.get_current_repo", return_value="canonical/detected-repo"),
+            patch("repolint.__main__.get_git_toplevel", return_value=tmp_path),
+            patch(
+                "repolint.__main__.resolve_repositories",
+                return_value=["canonical/detected-repo"],
+            ),
+            patch(
+                "repolint.__main__._load_quality_data",
+                return_value=_MINIMAL_QUALITY_DATA_DETECTED,
+            ),
+            patch(
+                "repolint.__main__.render_report_in_terminal",
+                side_effect=capture_render,
+            ),
+        ):
+            main()
+
+        return render_calls
+
+    def test_shortcut_mode_renders_details_report(self, tmp_path, monkeypatch):
+        render_calls = self._run_shortcut(monkeypatch, tmp_path)
+        assert len(render_calls) == 1
+        assert "canonical/detected-repo" in render_calls[0]
+
+    def test_shortcut_mode_standard_mode_not_triggered(self, tmp_path, monkeypatch):
+        """Standard mode (writing to output-dir) must not run in shortcut mode."""
+        monkeypatch.setattr(sys, "argv", ["repolint"])
+        from repolint.__main__ import main
+
+        with (
+            patch("repolint.__main__.load_config", side_effect=FileNotFoundError("no config")),
+            patch("repolint.__main__.configure_checks"),
+            patch("repolint.__main__.get_current_repo", return_value="canonical/detected-repo"),
+            patch("repolint.__main__.get_git_toplevel", return_value=tmp_path),
+            patch(
+                "repolint.__main__.resolve_repositories",
+                return_value=["canonical/detected-repo"],
+            ),
+            patch(
+                "repolint.__main__._load_quality_data",
+                return_value=_MINIMAL_QUALITY_DATA_DETECTED,
+            ),
+            patch("repolint.__main__.render_report_in_terminal"),
+            patch("repolint.__main__._run_standard_mode") as mock_std,
+        ):
+            main()
+
+        mock_std.assert_not_called()
