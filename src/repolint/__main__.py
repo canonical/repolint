@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from repolint.checks import build_checks_metadata, configure_checks
@@ -32,6 +32,13 @@ from repolint.utils import (
 )
 
 
+def _get_version() -> str:
+    try:
+        return version("repolint")
+    except PackageNotFoundError:
+        return "unknown"
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="repolint",
@@ -40,7 +47,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {version('repolint')}",
+        version=f"%(prog)s {_get_version()}",
     )
     parser.add_argument(
         "--config",
