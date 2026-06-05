@@ -48,11 +48,14 @@ repolint [REPO] [--config PATH] [--query QUERY] ...
 | `--query QUERY` | _(none)_ | GitHub search query; results merged with config repositories. Archived repos are excluded automatically. |
 | `--output NAME` | `quality` | Base name for the summary reports: `NAME.json` and `NAME.md`. Per-repository detail files are always named `<org>-<repo>-details.md`. |
 | `--output-dir DIR` | `reports` | Directory where all report files are written. Created if it does not exist. |
+| `--version` | — | Print the installed version and exit. |
 
 ### Examples
 
 ```bash
-# Analyse the repository in the current working directory (auto-detected from git remote)
+# Analyse the repository in the current working directory (auto-detected from git remote).
+# Uses the local working tree directly — no network clone needed.
+# The detail report is shown in the terminal immediately; no files written to the CWD.
 repolint
 
 # Analyse a specific repository by name — no config file needed
