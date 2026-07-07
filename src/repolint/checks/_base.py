@@ -102,13 +102,18 @@ class Check(ABC):
         """Return a short-circuit CheckResult for exclusion/dependency, or None."""
         config_excluded: list[str] = _checks_overrides.get(self.name, {}).get("excluded", [])
         if repo in config_excluded:
-            return CheckResult(CheckStatus.NOT_ELIGIBLE, "Repository is excluded from this check.")
+            return CheckResult(CheckStatus.EXCLUDED, "Repository is excluded from this check.")
         for dependency in self.depends_on:
             if dependency not in previous_results:
                 raise RuntimeError(
                     f"[{repo}][{self.name}] Couldn't find the result of the {dependency!r} dependency."
                 )
             dep_result = previous_results[dependency].result
+            if dep_result == CheckStatus.ERROR:
+                return CheckResult(
+                    CheckStatus.ERROR,
+                    f"Skipped. Depends on {dependency} which could not be evaluated.",
+                )
             if dep_result != CheckStatus.COMPLIANT:
                 return CheckResult(
                     CheckStatus.NOT_ELIGIBLE,
@@ -130,7 +135,10 @@ class Check(ABC):
         try:
             return self.run(repo)
         except subprocess.CalledProcessError as e:
-            return CheckResult(CheckStatus.NOT_COMPLIANT, f"Failed to clone repository: {e}")
+            return CheckResult(
+                CheckStatus.ERROR,
+                f"Check could not run (command failed): {e}.",
+            )
 
 
 class ParentCheck(Check):
@@ -190,6 +198,14 @@ class ParentCheck(Check):
             return CheckResult(
                 CheckStatus.NOT_COMPLIANT,
                 f"Subcheck(s) {', '.join(failed)} is/are not compliant.",
+            )
+        errored = [
+            c.name for c in children if previous_results[c.name].result == CheckStatus.ERROR
+        ]
+        if errored:
+            return CheckResult(
+                CheckStatus.ERROR,
+                f"Subcheck(s) {', '.join(errored)} could not be evaluated.",
             )
         return CheckResult(CheckStatus.COMPLIANT, "All subchecks are compliant.")
 

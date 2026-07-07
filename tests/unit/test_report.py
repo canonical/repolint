@@ -471,10 +471,24 @@ class TestRenderMarkdownSubcheck:
             md = render_markdown_subcheck("ops_testing", "", data)
         assert "canonical/my-charm" not in md
 
+    def test_errored_section_contains_error_repos(self):
+        data = self._make_data(
+            {
+                "canonical/broken": {
+                    "ops_testing": _result_dict(CheckStatus.ERROR, "Check could not run.")
+                }
+            }
+        )
+        with patch("repolint.report.get_repository_details_filename", return_value="details.md"):
+            md = render_markdown_subcheck("ops_testing", "", data)
+        errored_section = md.split("## Errored")[1].split("##")[0]
+        assert "canonical/broken" in errored_section
+
     def test_all_three_section_headers_present(self):
         data = self._make_data({})
         md = render_markdown_subcheck("ops_testing", "", data)
         assert "## Failed" in md
+        assert "## Errored" in md
         assert "## Passed" in md
         assert "## Excluded" in md
 

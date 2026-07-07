@@ -19,7 +19,7 @@ class TfV1Check(Check):
     def run(self, repo: str) -> CheckResult:
         """Check that all Terraform modules use Juju provider v1."""
         local_repo = clone_repository_locally(repo)
-        expected_conf = r'juju\s*=\s*\{.*?\bversion\s*=\s*"~> 1\.'
+        expected_conf = r'juju\s*=\s*\{.*?\bversion\s*=\s*"\s*~>\s*1\.'
         results = [
             find_regexp_in_path(tf_file.parent, expected_conf)
             for tf_file in find_files_in_path(local_repo, "versions.tf")

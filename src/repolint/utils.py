@@ -14,6 +14,11 @@ import yaml
 
 from repolint.config import TMP_DIR
 
+# Skip files larger than this when scanning contents for regex patterns. Source
+# files of interest are far smaller; this bounds memory and time on repos that
+# contain large vendored or binary blobs.
+MAX_SCAN_BYTES = 5 * 1024 * 1024  # 5 MiB
+
 # Mapping from repo name (owner/repo) to a local directory that should be used
 # instead of cloning.  Populated via :func:`local_repo_override`.
 _local_overrides: dict[str, Path] = {}
@@ -194,7 +199,12 @@ def resolve_repositories(config: dict, extra_query: str | None = None) -> list[s
 
 @lru_cache(maxsize=200)
 def get_repository_topics(repo: str) -> list[str]:
-    """Fetch the topics of a repository using GitHub CLI."""
+    """Fetch the topics of a repository using GitHub CLI.
+
+    Raises :exc:`subprocess.CalledProcessError` when the ``gh`` CLI fails (for
+    example on a network or authentication error), so callers can surface a
+    "could not check" state instead of mistaking the failure for "no topics".
+    """
     cmd = [
         "gh",
         "repo",
@@ -205,10 +215,8 @@ def get_repository_topics(repo: str) -> list[str]:
         "--jq",
         ".repositoryTopics[].name",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        return result.stdout.strip().split("\n") if result.stdout.strip() else []
-    return []
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    return result.stdout.strip().split("\n") if result.stdout.strip() else []
 
 
 def clone_repository_locally(repo: str) -> Path:
@@ -303,6 +311,25 @@ def find_files_in_path(path: Path, filename: str) -> list[Path]:
     return found_files
 
 
+def _is_scannable(file: Path, tracked: "frozenset[Path] | None") -> bool:
+    """Return True if *file* should have its contents scanned for a pattern.
+
+    Skips non-files, untracked files (when a git file list is available),
+    ``.git`` internals (when not), and files larger than :data:`MAX_SCAN_BYTES`.
+    """
+    if not file.is_file():
+        return False
+    if tracked is not None:
+        if file not in tracked:
+            return False
+    elif ".git" in file.parts:
+        return False
+    try:
+        return file.stat().st_size <= MAX_SCAN_BYTES
+    except OSError:
+        return False
+
+
 def find_regexp_in_path(path: Path, pattern: str, *, recursive: bool = False) -> bool:
     """Search for a regexp pattern in all files under path.
 
@@ -310,24 +337,21 @@ def find_regexp_in_path(path: Path, pattern: str, *, recursive: bool = False) ->
     (re.DOTALL is enabled).  Git-tracked files only are scanned when the path
     is inside a git repository; otherwise all files are scanned (excluding
     hidden ``.git`` directories).
+
+    Files larger than :data:`MAX_SCAN_BYTES` and files that aren't valid UTF-8
+    (e.g. binaries) are skipped, keeping scans fast and memory-bounded.
     """
     if not (path.exists() and path.is_dir()):
         return False
     tracked = _get_git_tracked_files(path)
     glob = path.rglob("*") if recursive else path.glob("*")
     for file in glob:
-        if not file.is_file():
-            continue
-        if tracked is not None:
-            if file not in tracked:
-                continue
-        elif ".git" in file.parts:
+        if not _is_scannable(file, tracked):
             continue
         try:
             content = file.read_text()
         except UnicodeDecodeError:
-            print(f"WARNING: couldn't decode {file}, skipping.")
-            continue
+            continue  # binary or non-UTF-8 file
         if re.search(pattern, content, re.DOTALL):
             return True
     return False

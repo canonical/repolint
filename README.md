@@ -136,44 +136,50 @@ repositories:
   - canonical/my-charm
 
 checks:
-  squad_topic:
+  github_topics:
     excluded:
-      - canonical/my-charm   # this repo doesn't need a squad topic
+      - canonical/my-charm   # this repo doesn't need the standard topics
   github2jira:
     excluded:
       - canonical/my-charm   # no Jira integration required
 ```
 
+> Excluded repositories are reported as ➖ for that check, distinct from `n/a`
+> (a dependency check was not met).
+
 ## Checks
 
 Each repository is evaluated against the following criteria.
 Results are cached in `reports/quality.json` so subsequent runs only re-run
-checks for repositories that have not been analysed yet.
+checks for repositories that are new or whose set of checks has changed.
+Repositories removed from the configuration are dropped from the report
+automatically.
 
 ### Overview checks (shown in the overview table)
 
 | Check | Description |
 | --- | --- |
-| `github` | Repository matches all GitHub best practices (topics + Jira integration) |
-| `charmlibs` | Repository uses charmlibs instead of `operator_libs_linux` |
+| `github` | Repository matches all GitHub best practices (topics, Jira integration, required status checks) |
+| `dependencies` | Repository uses charmlibs instead of deprecated `operator_libs_linux` |
 | `unit_tests` | Repository follows unit testing best practices (no Harness) |
 | `integration_tests` | Repository follows integration testing best practices (Jubilant, Juju 4, CK8s) |
 | `terraform` | Repository follows Terraform best practices (Juju provider v1) |
 
 ### Sub-checks (hidden in the overview, visible in per-repository detail reports)
 
-| Check | Description |
-| --- | --- |
-| `squad_topic` | Repository has a `squad-*` GitHub topic |
-| `product_topic` | Repository has a `product-*` GitHub topic |
-| `github2jira` | `.github/.jira_sync_config.yaml` is present |
-| `contains_charm` | Repository contains at least one `charmcraft.yaml` |
-| `contains_k8s_charm` | Repository contains at least one Kubernetes charm |
-| `ops_testing` | No references to the deprecated Harness testing API |
-| `jubilant` | Integration tests use Jubilant |
-| `juju4` | At least one workflow targets Juju 4/stable |
-| `ck8s` | GitHub workflows set `use-canonical-k8s: true` |
-| `tf_v1` | All `versions.tf` files pin Juju provider `~> 1.*` |
+| Check | Parent | Description |
+| --- | --- | --- |
+| `github_topics` | `github` | Repository has a topic matching every configured pattern (see `checks.github_topics.patterns`) |
+| `github2jira` | `github` | `.github/.jira_sync_config.yaml` is present |
+| `github_required_checks` | `github` | The default branch has at least one required status check |
+| `charmlibs` | `dependencies` | No imports of the deprecated `charms.operator_libs_linux` |
+| `ops_testing` | `unit_tests` | No references to the deprecated Harness testing API |
+| `jubilant` | `integration_tests` | Integration tests use Jubilant |
+| `juju4` | `integration_tests` | At least one workflow targets Juju 4/stable |
+| `ck8s` | `integration_tests` | GitHub workflows set `use-canonical-k8s: true` |
+| `tf_v1` | `terraform` | All `versions.tf` files pin Juju provider `~> 1.*` |
+| `contains_charm` | _(internal)_ | Repository contains at least one `charmcraft.yaml` |
+| `contains_k8s_charm` | _(internal)_ | Repository contains at least one Kubernetes charm |
 
 ### Check result symbols
 
@@ -181,7 +187,9 @@ checks for repositories that have not been analysed yet.
 | --- | --- |
 | ✅ | Compliant |
 | ❌ | Not compliant |
-| n/a | Not eligible (dependency not met, or repository explicitly excluded) |
+| ⚠️ | Could not be checked (e.g. network/auth error or insufficient permissions) |
+| n/a | Not eligible — a dependency check is not met, so this check does not apply |
+| ➖ | Excluded — the repository is explicitly excluded from this check in the config |
 
 ## Contributing
 

@@ -43,11 +43,11 @@ class TestCheckExclusion:
     def teardown_method(self):
         configure_checks({})
 
-    def test_excluded_repo_returns_not_eligible(self):
+    def test_excluded_repo_returns_excluded(self):
         check = _make_simple_check("_test_excl_a")
         configure_checks({"_test_excl_a": {"excluded": ["canonical/excluded-repo"]}})
         result = check("canonical/excluded-repo")
-        assert result.result == CheckStatus.NOT_ELIGIBLE
+        assert result.result == CheckStatus.EXCLUDED
 
     def test_non_excluded_repo_runs_check(self):
         check = _make_simple_check("_test_excl_b")
@@ -78,11 +78,35 @@ class TestCheckDependencies:
         result = check("canonical/some-repo", previous_results=previous)
         assert result.result == CheckStatus.COMPLIANT
 
+    def test_dependency_errored_propagates_error(self):
+        check = _make_simple_check("_test_dep_err")
+        check.depends_on = ["dep_check"]  # type: ignore[assignment]
+        previous = {"dep_check": CheckResult(CheckStatus.ERROR, "boom")}
+        result = check("canonical/some-repo", previous_results=previous)
+        assert result.result == CheckStatus.ERROR
+        assert "dep_check" in result.message
+
     def test_missing_dependency_raises(self):
         check = _make_simple_check("_test_dep_c")
         check.depends_on = ["missing_dep"]  # type: ignore[assignment]
         with pytest.raises(RuntimeError, match="missing_dep"):
             check("canonical/some-repo", previous_results={})
+
+    def test_run_subprocess_failure_returns_error(self):
+        import subprocess
+
+        class _FailingCheck(Check):
+            name = "_test_fail"  # type: ignore[assignment]
+            description = "test"
+            parent = ""
+
+            def run(self, repo: str) -> CheckResult:
+                raise subprocess.CalledProcessError(1, ["gh", "repo", "clone"])
+
+        check = _REGISTRY.pop("_test_fail")
+        result = check("canonical/some-repo")
+        assert result.result == CheckStatus.ERROR
+        assert "could not run" in result.message.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +164,31 @@ class TestParentCheck:
         result = parent("canonical/some-repo", previous_results=previous)
         assert result.result == CheckStatus.NOT_COMPLIANT
         assert "_child_b2" in result.message
+
+    def test_one_child_errored_returns_error(self):
+        parent = ParentCheck("_test_parent_err")
+        self._added.append("_test_parent_err")
+        self._register_child("_child_err1", "_test_parent_err", CheckStatus.COMPLIANT)
+        self._register_child("_child_err2", "_test_parent_err", CheckStatus.ERROR)
+        previous = {
+            "_child_err1": CheckResult(CheckStatus.COMPLIANT, ""),
+            "_child_err2": CheckResult(CheckStatus.ERROR, "could not run"),
+        }
+        result = parent("canonical/some-repo", previous_results=previous)
+        assert result.result == CheckStatus.ERROR
+        assert "_child_err2" in result.message
+
+    def test_failure_takes_precedence_over_error(self):
+        parent = ParentCheck("_test_parent_mix")
+        self._added.append("_test_parent_mix")
+        self._register_child("_child_mix1", "_test_parent_mix", CheckStatus.NOT_COMPLIANT)
+        self._register_child("_child_mix2", "_test_parent_mix", CheckStatus.ERROR)
+        previous = {
+            "_child_mix1": CheckResult(CheckStatus.NOT_COMPLIANT, "failed"),
+            "_child_mix2": CheckResult(CheckStatus.ERROR, "could not run"),
+        }
+        result = parent("canonical/some-repo", previous_results=previous)
+        assert result.result == CheckStatus.NOT_COMPLIANT
 
     def test_missing_child_result_raises(self):
         parent = ParentCheck("_test_parent_c")
@@ -302,7 +351,7 @@ class TestGithubRequiredChecksCheck:
         assert result.result == CheckStatus.NOT_COMPLIANT
         assert "main" in result.message
 
-    def test_permission_denied_returns_not_eligible(self):
+    def test_permission_denied_returns_error(self):
         from repolint.checks.github_required_checks import BranchProtectionPermissionError
 
         with (
@@ -317,7 +366,7 @@ class TestGithubRequiredChecksCheck:
             ),
         ):
             result = self._get_check()("canonical/my-charm")
-        assert result.result == CheckStatus.NOT_ELIGIBLE
+        assert result.result == CheckStatus.ERROR
         assert "permission" in result.message.lower()
 
     def test_check_has_github_parent(self):
@@ -441,7 +490,7 @@ class TestConfigureChecks:
         check = get_check("github2jira")
         assert check is not None
         result = check("canonical/extra-repo")
-        assert result.result == CheckStatus.NOT_ELIGIBLE
+        assert result.result == CheckStatus.EXCLUDED
 
     def test_configure_non_excluded_repo_runs(self):
         configure_checks({"github2jira": {"excluded": ["canonical/excluded-repo"]}})
