@@ -16,6 +16,18 @@ from repolint.utils import get_repository_details_filename, sanitize
 _SPAN_TAG_RE = re.compile(r"<span[^>]*>(.*?)</span>", re.DOTALL)
 
 
+def _repo_cell(repo: str) -> str:
+    """Return the Markdown cell linking to a repository and its detail report."""
+    details_file = get_repository_details_filename(repo)
+    return f"[{repo}](https://github.com/{repo}) [🔍]({details_file})"
+
+
+def _result_cell(result: dict) -> str:
+    """Return the Markdown cell for a single check result, with its message as a tooltip."""
+    msg = sanitize(result["message"])
+    return f"<span title='{msg}'>{result['result']}</span>"
+
+
 def render_report_in_terminal(content: str) -> None:
     """Render a Markdown report string in the terminal using rich.
 
@@ -105,17 +117,18 @@ def render_markdown_overview(quality_data: dict, output: str | None = None) -> s
     ]
 
     for repo, repo_results in results.items():
-        details_file = get_repository_details_filename(repo)
-        row = [f"[{repo}](https://github.com/{repo}) [🔍]({details_file})"]
+        row = [_repo_cell(repo)]
         for check in visible_checks:
             result = repo_results.get(check["name"])
             if result is None:
                 raise RuntimeError(f"Missing result for {check['name']} in repository {repo}.")
-            msg = sanitize(result["message"])
-            row.append(f"<span title='{msg}'>{result['result']}</span>")
+            row.append(_result_cell(result))
         table.append("| " + " | ".join(row) + " |")
 
-    return "\n".join(table) + "\n\nLast updated: " + datetime.now().isoformat()
+    generated_at = (
+        quality_data.get("metadata", {}).get("generated_at") or datetime.now().isoformat()
+    )
+    return "\n".join(table) + "\n\nLast updated: " + generated_at
 
 
 def render_markdown_parent_check(
@@ -144,15 +157,13 @@ def render_markdown_parent_check(
     ]
 
     for repo, repo_results in results.items():
-        details_file = get_repository_details_filename(repo)
-        row = [f"[{repo}](https://github.com/{repo}) [🔍]({details_file})"]
+        row = [_repo_cell(repo)]
         for child in children_meta:
             result = repo_results.get(child["name"])
             if result is None:
                 row.append("")
             else:
-                msg = sanitize(result["message"])
-                row.append(f"<span title='{msg}'>{result['result']}</span>")
+                row.append(_result_cell(result))
         table.append("| " + " | ".join(row) + " |")
 
     desc_suffix = f" — {parent_description}" if parent_description else ""
@@ -166,13 +177,16 @@ def render_markdown_subcheck(
 ) -> str:
     """Render a per-subcheck Markdown report across all repositories.
 
-    The report has three sections — **Failed**, **Passed**, and **Excluded** —
-    each containing a table with a repository column and a single result column
-    for *subcheck_name*.
+    The report has four sections — **Failed**, **Errored**, **Passed**, and
+    **Excluded** — each containing a table with a repository column and a single
+    result column for *subcheck_name*. "Errored" lists repositories the check
+    could not be evaluated for; "Excluded" lists repositories that are not
+    eligible (dependency not met or explicitly excluded).
     """
     results: dict = quality_data["results"]
 
     failed: list[tuple[str, dict]] = []
+    errored: list[tuple[str, dict]] = []
     passed: list[tuple[str, dict]] = []
     excluded: list[tuple[str, dict]] = []
 
@@ -183,6 +197,8 @@ def render_markdown_subcheck(
         status = result["result"]
         if status == CheckStatus.NOT_COMPLIANT:
             failed.append((repo, result))
+        elif status == CheckStatus.ERROR:
+            errored.append((repo, result))
         elif status == CheckStatus.COMPLIANT:
             passed.append((repo, result))
         else:
@@ -193,19 +209,15 @@ def render_markdown_subcheck(
             return "_None._\n"
         header = f"| Repository | {subcheck_name} |"
         separator = "| --- | --- |"
-        table_rows = []
-        for repo, result in rows:
-            details_file = get_repository_details_filename(repo)
-            repo_cell = f"[{repo}](https://github.com/{repo}) [🔍]({details_file})"
-            msg = sanitize(result["message"])
-            result_cell = f"<span title='{msg}'>{result['result']}</span>"
-            table_rows.append(f"| {repo_cell} | {result_cell} |")
+        table_rows = [f"| {_repo_cell(repo)} | {_result_cell(result)} |" for repo, result in rows]
         return "\n".join([header, separator, *table_rows]) + "\n"
 
     desc_suffix = f" — {subcheck_description}" if subcheck_description else ""
     markdown = f"# {subcheck_name}{desc_suffix}\n\n"
     markdown += "## Failed\n\n"
     markdown += _make_table(failed)
+    markdown += "\n## Errored\n\n"
+    markdown += _make_table(errored)
     markdown += "\n## Passed\n\n"
     markdown += _make_table(passed)
     markdown += "\n## Excluded\n\n"

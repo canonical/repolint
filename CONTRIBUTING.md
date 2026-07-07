@@ -60,8 +60,8 @@ src/repolint/
 ├── checks/
 │   ├── _base.py           # Check ABC, ParentCheck, CheckResult, registry helpers
 │   ├── __init__.py        # Triggers registration; defines ParentCheck instances
-│   ├── squad_topic.py
-│   ├── product_topic.py
+│   ├── github_topics.py
+│   ├── github2jira.py
 │   └── ...
 ├── config.py              # CheckStatus enum and path/directory constants
 ├── report.py              # Report rendering and analysis orchestration
@@ -81,7 +81,7 @@ automatically registers a singleton instance in the global `_REGISTRY` via
 
 ```
 Check (ABC)
-├── SquadTopicCheck      name = "squad_topic"
+├── GithubTopicsCheck    name = "github_topics"
 ├── ...
 └── ParentCheck         name set via constructor — self-registers on __init__
 ```
@@ -94,12 +94,16 @@ is never called directly.
 Cross-cutting behaviour lives in `Check.__call__`:
 
 1. **Config-based exclusion** — if the repo is listed under `checks.<name>.excluded`
-   in `repolint.yaml`, the check returns `NOT_ELIGIBLE`.
+   in `repolint.yaml`, the check returns `EXCLUDED` (➖).
 2. **Dependency enforcement** — if any check listed in `depends_on` is not
-   `COMPLIANT`, the check is skipped as `NOT_ELIGIBLE`.
+   `COMPLIANT`, the check is skipped as `NOT_ELIGIBLE` (n/a). If a dependency
+   itself `ERROR`ed, the skip is reported as `ERROR` (⚠️) instead.
 3. **Error handling** — if `run()` raises `subprocess.CalledProcessError` (e.g.
-   a repository clone failure), the check returns `NOT_COMPLIANT` with the error
-   message.
+   a repository clone or `gh` API failure), the check returns `ERROR` (⚠️) so a
+   failed lookup is never mistaken for a real non-compliance.
+
+A `ParentCheck` is `NOT_COMPLIANT` if any child failed, `ERROR` if no child
+failed but at least one could not be evaluated, and `COMPLIANT` otherwise.
 
 `CheckResult` is a dataclass with a `CheckStatus` enum value and an optional
 message string.  It serialises to/from plain dicts for JSON caching.

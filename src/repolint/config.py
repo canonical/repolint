@@ -18,3 +18,5 @@ class CheckStatus(StrEnum):
     COMPLIANT = "✅"
     NOT_COMPLIANT = "❌"
     NOT_ELIGIBLE = "n/a"
+    EXCLUDED = "➖"  # noqa: RUF001
+    ERROR = "⚠️"

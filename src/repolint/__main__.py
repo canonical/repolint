@@ -11,8 +11,9 @@ import tempfile
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import NamedTuple
 
-from repolint.checks import build_checks_metadata, configure_checks
+from repolint.checks import build_checks_metadata, configure_checks, list_checks
 from repolint.config import DEFAULT_CONFIG_FILE, DEFAULT_REPORTS_DIR
 from repolint.report import (
     analyze,
@@ -119,31 +120,68 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_quality_data(json_file: Path, repositories: list[str]) -> dict:
-    """Return the quality data dict, loading from cache or running analysis."""
-    if json_file.exists():
-        print(f"WARNING: using cached results, rm {json_file} to re-analyze.")
-        with json_file.open() as fh:
-            raw = json.load(fh)
-        if "results" in raw:
-            return raw
-        # Legacy format (flat dict without metadata wrapper) — reconstruct.
-        return {
-            "metadata": {"schema": "v0", "generated_at": None, "checks": build_checks_metadata()},
-            "results": raw,
-        }
+def _read_cache(json_file: Path) -> tuple[dict, str | None]:
+    """Return ``(results, generated_at)`` from a cache file, or ``({}, None)``.
 
-    results = analyze(repositories)
+    Handles both the current wrapped format (``{"metadata": …, "results": …}``)
+    and the legacy flat format (a bare ``repo -> results`` mapping).
+    """
+    if not json_file.exists():
+        return {}, None
+    with json_file.open() as fh:
+        raw = json.load(fh)
+    if "results" in raw:
+        return raw["results"], raw.get("metadata", {}).get("generated_at")
+    # Legacy flat format — no metadata wrapper.
+    return raw, None
+
+
+def _load_quality_data(json_file: Path, repositories: list[str]) -> dict:
+    """Return the quality data dict for *repositories*, reusing cache where valid.
+
+    Cached repository results are reused only when they cover every currently
+    registered check; repositories that are missing from the cache (or missing a
+    newly added check) are analysed afresh. Repositories no longer requested are
+    dropped so the report always matches the requested set.
+    """
+    cached_results, cached_generated_at = _read_cache(json_file)
+    registered_checks = {check.name for check in list_checks()}
+
+    results: dict[str, dict] = {}
+    to_analyze: list[str] = []
+    for repo in repositories:
+        cached_entry = cached_results.get(repo)
+        if cached_entry is not None and registered_checks.issubset(cached_entry.keys()):
+            results[repo] = cached_entry
+        else:
+            to_analyze.append(repo)
+
+    reused = len(results)
+    if reused and to_analyze:
+        print(f"Reusing cached results for {reused} repository(ies); analyzing {len(to_analyze)}.")
+    elif reused:
+        print(
+            f"Reusing cached results for all {reused} repository(ies) (use --no-cache to refresh)."
+        )
+
+    if to_analyze:
+        fresh = analyze(to_analyze)
+        for repo, repo_results in fresh.items():
+            results[repo] = {name: result.to_dict() for name, result in repo_results.items()}
+
+    # Preserve the original timestamp when nothing was re-analyzed.
+    generated_at = (
+        cached_generated_at
+        if cached_generated_at and not to_analyze
+        else datetime.now().isoformat()
+    )
     quality_data = {
         "metadata": {
             "schema": "v0",
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": generated_at,
             "checks": build_checks_metadata(),
         },
-        "results": {
-            repo: {k: v.to_dict() for k, v in repo_results.items()}
-            for repo, repo_results in results.items()
-        },
+        "results": {repo: results[repo] for repo in sorted(repositories)},
     }
     with json_file.open(mode="w") as fh:
         json.dump(quality_data, fh, indent=2)
@@ -162,33 +200,43 @@ def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
             parser.error(f"Invalid repository name '{args.repo}'. Expected 'owner/repo' format.")
 
 
+class RepoSelection(NamedTuple):
+    """Outcome of applying the REPO / CWD shortcuts.
+
+    ``cwd_repo`` is set only when CWD shortcut mode is active (no explicit repo,
+    query, or config — the repository was auto-detected from the git remote of
+    the current directory). It is ``None`` for standard mode.
+    """
+
+    cwd_repo: str | None
+
+
 def _apply_repo_shortcuts(
     args: argparse.Namespace, config: dict, parser: argparse.ArgumentParser
-) -> str | None:
+) -> RepoSelection:
     """Apply the positional REPO shortcut or CWD auto-detection to *config* in place.
 
-    Returns the auto-detected repository name when CWD shortcut mode is
-    activated, or *None* in all other cases.
+    Returns a :class:`RepoSelection` whose ``cwd_repo`` is the auto-detected
+    repository name when CWD shortcut mode is activated, and ``None`` otherwise.
     """
     if args.repo is not None:
         config.setdefault("repositories", [])
         if args.repo not in config["repositories"]:
             config["repositories"].insert(0, args.repo)
-        return None
+        return RepoSelection(cwd_repo=None)
 
     if args.query is not None or config.get("repositories") or config.get("repository_query"):
-        return None
+        return RepoSelection(cwd_repo=None)
 
     detected = get_current_repo()
     if detected:
         print(f"Auto-detected repository from current directory: {detected}")
         config["repositories"] = [detected]
-        return detected
-    else:
-        parser.error(
-            "No repositories to analyze. Provide a REPO argument, use --query, "
-            "create a repolint.yaml, or run from a directory with a GitHub remote."
-        )
+        return RepoSelection(cwd_repo=detected)
+    parser.error(
+        "No repositories to analyze. Provide a REPO argument, use --query, "
+        "create a repolint.yaml, or run from a directory with a GitHub remote."
+    )
 
 
 def main() -> None:
@@ -222,8 +270,7 @@ def main() -> None:
     configure_checks(config.get("checks", {}))
 
     # Apply shortcuts: positional REPO arg or CWD auto-detection.
-    # Returns the detected repo name when CWD shortcut mode is active.
-    shortcut_repo = _apply_repo_shortcuts(args, config, parser)
+    selection = _apply_repo_shortcuts(args, config, parser)
 
     try:
         repositories = resolve_repositories(config, extra_query=args.query)
@@ -232,8 +279,8 @@ def main() -> None:
         parser.error(f"Repository query failed: {stderr}")
         return  # unreachable; satisfies type checkers
 
-    if shortcut_repo:
-        _run_shortcut_mode(args, shortcut_repo, repositories)
+    if selection.cwd_repo is not None:
+        _run_shortcut_mode(args, selection.cwd_repo, repositories)
     else:
         _run_standard_mode(args, repositories)
 

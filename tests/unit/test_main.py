@@ -108,12 +108,13 @@ class TestSubcheckReportGeneration:
                 "repolint.__main__.resolve_repositories",
                 return_value=["canonical/my-charm"],
             ),
+            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
         ):
             main()
 
         assert (tmp_path / "quality-ops_testing.md").exists()
 
-    def test_subcheck_file_contains_three_sections(self, tmp_path, monkeypatch):
+    def test_subcheck_file_contains_all_sections(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
             sys,
             "argv",
@@ -133,11 +134,13 @@ class TestSubcheckReportGeneration:
                 "repolint.__main__.resolve_repositories",
                 return_value=["canonical/my-charm"],
             ),
+            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
         ):
             main()
 
         content = (tmp_path / "quality-ops_testing.md").read_text()
         assert "## Failed" in content
+        assert "## Errored" in content
         assert "## Passed" in content
         assert "## Excluded" in content
 
@@ -162,6 +165,7 @@ class TestParentCheckReportGeneration:
                 "repolint.__main__.resolve_repositories",
                 return_value=["canonical/my-charm"],
             ),
+            patch("repolint.__main__._load_quality_data", return_value=_MINIMAL_QUALITY_DATA),
         ):
             main()
 
@@ -435,3 +439,164 @@ class TestShortcutMode:
             main()
 
         mock_std.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Cache merging in _load_quality_data
+# ---------------------------------------------------------------------------
+
+
+class _FakeCheck:
+    def __init__(self, name):
+        self.name = name
+
+
+def _write_cache(json_file, results, generated_at="2020-01-01T00:00:00"):
+    json_file.write_text(
+        json.dumps(
+            {
+                "metadata": {"schema": "v0", "generated_at": generated_at, "checks": []},
+                "results": results,
+            }
+        )
+    )
+
+
+class TestLoadQualityData:
+    def _patches(self, registered_names):
+        checks = [_FakeCheck(name) for name in registered_names]
+        return (
+            patch("repolint.__main__.list_checks", return_value=checks),
+            patch("repolint.__main__.build_checks_metadata", return_value=[]),
+        )
+
+    def test_reuses_cache_when_complete(self, tmp_path):
+        from repolint.__main__ import _load_quality_data
+
+        json_file = tmp_path / "quality.json"
+        cached = {"canonical/a": {"c1": {"result": "✅", "message": "ok"}}}
+        _write_cache(json_file, cached, generated_at="2020-06-06T00:00:00")
+
+        list_patch, meta_patch = self._patches(["c1"])
+        with (
+            list_patch,
+            meta_patch,
+            patch("repolint.__main__.analyze") as mock_analyze,
+        ):
+            data = _load_quality_data(json_file, ["canonical/a"])
+
+        mock_analyze.assert_not_called()
+        assert data["results"]["canonical/a"]["c1"]["message"] == "ok"
+        # Timestamp preserved when nothing is re-analyzed.
+        assert data["metadata"]["generated_at"] == "2020-06-06T00:00:00"
+
+    def test_analyzes_only_new_repositories(self, tmp_path):
+        from repolint.__main__ import _load_quality_data
+        from repolint.checks import CheckResult, CheckStatus
+
+        json_file = tmp_path / "quality.json"
+        _write_cache(json_file, {"canonical/a": {"c1": {"result": "✅", "message": "cached"}}})
+
+        list_patch, meta_patch = self._patches(["c1"])
+        with (
+            list_patch,
+            meta_patch,
+            patch(
+                "repolint.__main__.analyze",
+                return_value={
+                    "canonical/b": {"c1": CheckResult(CheckStatus.NOT_COMPLIANT, "new")}
+                },
+            ) as mock_analyze,
+        ):
+            data = _load_quality_data(json_file, ["canonical/a", "canonical/b"])
+
+        mock_analyze.assert_called_once_with(["canonical/b"])
+        assert data["results"]["canonical/a"]["c1"]["message"] == "cached"
+        assert data["results"]["canonical/b"]["c1"]["result"] == "❌"
+
+    def test_reanalyzes_repo_missing_a_registered_check(self, tmp_path):
+        from repolint.__main__ import _load_quality_data
+        from repolint.checks import CheckResult, CheckStatus
+
+        json_file = tmp_path / "quality.json"
+        # Cache only has c1; a new check c2 was added since.
+        _write_cache(json_file, {"canonical/a": {"c1": {"result": "✅", "message": "old"}}})
+
+        list_patch, meta_patch = self._patches(["c1", "c2"])
+        with (
+            list_patch,
+            meta_patch,
+            patch(
+                "repolint.__main__.analyze",
+                return_value={
+                    "canonical/a": {
+                        "c1": CheckResult(CheckStatus.COMPLIANT, "fresh"),
+                        "c2": CheckResult(CheckStatus.COMPLIANT, "fresh"),
+                    }
+                },
+            ) as mock_analyze,
+        ):
+            data = _load_quality_data(json_file, ["canonical/a"])
+
+        mock_analyze.assert_called_once_with(["canonical/a"])
+        assert data["results"]["canonical/a"]["c2"]["message"] == "fresh"
+
+    def test_drops_repositories_no_longer_requested(self, tmp_path):
+        from repolint.__main__ import _load_quality_data
+
+        json_file = tmp_path / "quality.json"
+        _write_cache(
+            json_file,
+            {
+                "canonical/a": {"c1": {"result": "✅", "message": ""}},
+                "canonical/stale": {"c1": {"result": "✅", "message": ""}},
+            },
+        )
+
+        list_patch, meta_patch = self._patches(["c1"])
+        with list_patch, meta_patch, patch("repolint.__main__.analyze") as mock_analyze:
+            data = _load_quality_data(json_file, ["canonical/a"])
+
+        mock_analyze.assert_not_called()
+        assert set(data["results"]) == {"canonical/a"}
+
+    def test_handles_legacy_flat_cache(self, tmp_path):
+        from repolint.__main__ import _load_quality_data
+
+        json_file = tmp_path / "quality.json"
+        # Legacy format: bare repo -> results mapping, no metadata wrapper.
+        json_file.write_text(json.dumps({"canonical/a": {"c1": {"result": "✅", "message": "x"}}}))
+
+        list_patch, meta_patch = self._patches(["c1"])
+        with list_patch, meta_patch, patch("repolint.__main__.analyze") as mock_analyze:
+            data = _load_quality_data(json_file, ["canonical/a"])
+
+        mock_analyze.assert_not_called()
+        assert data["results"]["canonical/a"]["c1"]["message"] == "x"
+
+    def test_results_are_sorted_alphabetically(self, tmp_path):
+        from repolint.__main__ import _load_quality_data
+
+        json_file = tmp_path / "quality.json"
+        result_entry = {"c1": {"result": "✅", "message": ""}}
+        _write_cache(
+            json_file,
+            {
+                "canonical/z-repo": result_entry,
+                "canonical/a-repo": result_entry,
+                "canonical/m-repo": result_entry,
+            },
+        )
+
+        list_patch, meta_patch = self._patches(["c1"])
+        with list_patch, meta_patch, patch("repolint.__main__.analyze"):
+            data = _load_quality_data(
+                json_file,
+                ["canonical/z-repo", "canonical/a-repo", "canonical/m-repo"],
+            )
+
+        assert list(data["results"].keys()) == [
+            "canonical/a-repo",
+            "canonical/m-repo",
+            "canonical/z-repo",
+        ]

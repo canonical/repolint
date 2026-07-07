@@ -11,7 +11,13 @@ from repolint.config import CheckStatus
 
 
 def get_default_branch(repo: str) -> str:
-    """Return the default branch name for the given repository."""
+    """Return the default branch name for the given repository.
+
+    Raises :exc:`subprocess.CalledProcessError` when the ``gh`` CLI fails so the
+    caller can report a "could not check" state rather than silently assuming a
+    branch name. Falls back to ``"main"`` only when the command succeeds but
+    returns no branch name.
+    """
     cmd = [
         "gh",
         "repo",
@@ -26,10 +32,9 @@ def get_default_branch(repo: str) -> str:
         cmd,
         capture_output=True,
         text=True,
+        check=True,
     )
-    if result.returncode == 0 and result.stdout.strip():
-        return result.stdout.strip()
-    return "main"
+    return result.stdout.strip() or "main"
 
 
 class BranchProtectionPermissionError(Exception):
@@ -89,7 +94,7 @@ class GithubRequiredChecksCheck(Check):
         try:
             checks = get_required_status_checks(repo, branch)
         except BranchProtectionPermissionError as exc:
-            return CheckResult(CheckStatus.NOT_ELIGIBLE, str(exc))
+            return CheckResult(CheckStatus.ERROR, str(exc))
         if checks is None:
             return CheckResult(
                 CheckStatus.NOT_COMPLIANT,
