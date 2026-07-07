@@ -524,3 +524,97 @@ class TestConfigureChecks:
         from repolint.checks._base import _checks_overrides
 
         assert _checks_overrides == {}
+
+
+# ---------------------------------------------------------------------------
+# UseGhRunnersCheck
+# ---------------------------------------------------------------------------
+
+_OPERATOR_WORKFLOWS_LINE = "uses: canonical/operator-workflows/.github/workflows/test.yaml"
+
+
+class TestUseGhRunnersCheck:
+    def _make_workflows_dir(self, tmp_path):
+        workflows = tmp_path / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        return workflows
+
+    def _patch_clone(self, tmp_path):
+        return patch(
+            "repolint.checks.use_gh_runners.clone_repository_locally",
+            return_value=tmp_path,
+        )
+
+    def test_no_workflows_dir_returns_not_eligible(self, tmp_path):
+        with self._patch_clone(tmp_path):
+            from repolint.checks.use_gh_runners import UseGhRunnersCheck
+
+            result = UseGhRunnersCheck().run("canonical/some-repo")
+        assert result.result == CheckStatus.NOT_ELIGIBLE
+
+    def test_no_matching_workflow_returns_not_eligible(self, tmp_path):
+        workflows = self._make_workflows_dir(tmp_path)
+        (workflows / "ci.yaml").write_text("name: ci\n")
+        with self._patch_clone(tmp_path):
+            from repolint.checks.use_gh_runners import UseGhRunnersCheck
+
+            result = UseGhRunnersCheck().run("canonical/some-repo")
+        assert result.result == CheckStatus.NOT_ELIGIBLE
+
+    def test_matching_workflow_no_self_hosted_runner_returns_compliant(self, tmp_path):
+        workflows = self._make_workflows_dir(tmp_path)
+        (workflows / "test.yaml").write_text(
+            f"name: test\njobs:\n  unit:\n    {_OPERATOR_WORKFLOWS_LINE}\n"
+        )
+        with self._patch_clone(tmp_path):
+            from repolint.checks.use_gh_runners import UseGhRunnersCheck
+
+            result = UseGhRunnersCheck().run("canonical/some-repo")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_matching_workflow_self_hosted_runner_false_returns_compliant(self, tmp_path):
+        workflows = self._make_workflows_dir(tmp_path)
+        (workflows / "test.yaml").write_text(
+            f"name: test\njobs:\n  unit:\n    {_OPERATOR_WORKFLOWS_LINE}\n"
+            "    with:\n      self-hosted-runner: false\n"
+        )
+        with self._patch_clone(tmp_path):
+            from repolint.checks.use_gh_runners import UseGhRunnersCheck
+
+            result = UseGhRunnersCheck().run("canonical/some-repo")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_matching_workflow_self_hosted_runner_true_returns_not_compliant(self, tmp_path):
+        workflows = self._make_workflows_dir(tmp_path)
+        (workflows / "test.yaml").write_text(
+            f"name: test\njobs:\n  unit:\n    {_OPERATOR_WORKFLOWS_LINE}\n"
+            "    with:\n      self-hosted-runner: true\n"
+        )
+        with self._patch_clone(tmp_path):
+            from repolint.checks.use_gh_runners import UseGhRunnersCheck
+
+            result = UseGhRunnersCheck().run("canonical/some-repo")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "test.yaml" in result.message
+
+    def test_multiple_workflows_one_offending_returns_not_compliant(self, tmp_path):
+        workflows = self._make_workflows_dir(tmp_path)
+        (workflows / "ok.yaml").write_text(
+            f"name: ok\njobs:\n  unit:\n    {_OPERATOR_WORKFLOWS_LINE}\n"
+        )
+        (workflows / "bad.yaml").write_text(
+            f"name: bad\njobs:\n  unit:\n    {_OPERATOR_WORKFLOWS_LINE}\n"
+            "    with:\n      self-hosted-runner: true\n"
+        )
+        with self._patch_clone(tmp_path):
+            from repolint.checks.use_gh_runners import UseGhRunnersCheck
+
+            result = UseGhRunnersCheck().run("canonical/some-repo")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "bad.yaml" in result.message
+        assert "ok.yaml" not in result.message
+
+    def test_check_has_unit_tests_parent(self):
+        check = get_check("use_gh_runners")
+        assert check is not None
+        assert check.parent == "unit_tests"

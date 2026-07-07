@@ -181,7 +181,7 @@ def _load_quality_data(json_file: Path, repositories: list[str]) -> dict:
             "generated_at": generated_at,
             "checks": build_checks_metadata(),
         },
-        "results": {repo: results[repo] for repo in repositories},
+        "results": {repo: results[repo] for repo in sorted(repositories)},
     }
     with json_file.open(mode="w") as fh:
         json.dump(quality_data, fh, indent=2)

@@ -20,6 +20,7 @@ from repolint.checks import (  # noqa: F401
     juju4,
     ops_testing,
     tf_v1,
+    use_gh_runners,
 )
 from repolint.checks._base import (
     Check,

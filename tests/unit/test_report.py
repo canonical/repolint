@@ -551,6 +551,10 @@ class TestAnalyzeRepo:
             patch("repolint.checks.jubilant.clone_repository_locally", return_value=tmp_path),
             patch("repolint.checks.tf_v1.clone_repository_locally", return_value=tmp_path),
             patch("repolint.checks.charmlibs.clone_repository_locally", return_value=tmp_path),
+            patch(
+                "repolint.checks.use_gh_runners.clone_repository_locally",
+                return_value=tmp_path,
+            ),
         ):
             results = analyze_repo("canonical/my-charm")
 

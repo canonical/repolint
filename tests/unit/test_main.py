@@ -573,3 +573,30 @@ class TestLoadQualityData:
 
         mock_analyze.assert_not_called()
         assert data["results"]["canonical/a"]["c1"]["message"] == "x"
+
+    def test_results_are_sorted_alphabetically(self, tmp_path):
+        from repolint.__main__ import _load_quality_data
+
+        json_file = tmp_path / "quality.json"
+        result_entry = {"c1": {"result": "✅", "message": ""}}
+        _write_cache(
+            json_file,
+            {
+                "canonical/z-repo": result_entry,
+                "canonical/a-repo": result_entry,
+                "canonical/m-repo": result_entry,
+            },
+        )
+
+        list_patch, meta_patch = self._patches(["c1"])
+        with list_patch, meta_patch, patch("repolint.__main__.analyze"):
+            data = _load_quality_data(
+                json_file,
+                ["canonical/z-repo", "canonical/a-repo", "canonical/m-repo"],
+            )
+
+        assert list(data["results"].keys()) == [
+            "canonical/a-repo",
+            "canonical/m-repo",
+            "canonical/z-repo",
+        ]
