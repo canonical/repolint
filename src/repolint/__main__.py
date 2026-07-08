@@ -13,6 +13,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import NamedTuple
 
+from repolint.catalog import load_catalog
 from repolint.checks import build_checks_metadata, configure_checks, list_checks
 from repolint.config import DEFAULT_CONFIG_FILE, DEFAULT_REPORTS_DIR
 from repolint.report import (
@@ -68,6 +69,17 @@ def _build_parser() -> argparse.ArgumentParser:
             "GitHub repository search query whose results are merged with the "
             "repositories from the config file. Archived repositories are automatically "
             "excluded. Example: 'org:canonical topic:platform-engineering topic:squad-emea'."
+        ),
+    )
+    parser.add_argument(
+        "--catalog",
+        metavar="FILE",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the product catalog JSON file produced by scripts/fetch_catalog.py "
+            "(default: catalog.json next to the config file). "
+            "When absent, the overview report uses a flat layout with no tier grouping."
         ),
     )
     parser.add_argument(
@@ -285,6 +297,13 @@ def main() -> None:
         _run_standard_mode(args, repositories)
 
 
+def _resolve_catalog_path(args: argparse.Namespace) -> Path:
+    """Return the catalog file path from CLI args or the default beside the config."""
+    if args.catalog is not None:
+        return args.catalog
+    return args.config.parent / "catalog.json"
+
+
 def _run_standard_mode(args: argparse.Namespace, repositories: list[str]) -> None:
     """Run analysis and write reports to the configured output directory."""
     reports_dir: Path = args.output_dir
@@ -297,7 +316,8 @@ def _run_standard_mode(args: argparse.Namespace, repositories: list[str]) -> Non
         print(f"Cache cleared: {json_file}")
 
     quality_data = _load_quality_data(json_file, repositories)
-    _write_reports(reports_dir, args.output, quality_data)
+    service_levels = load_catalog(_resolve_catalog_path(args))
+    _write_reports(reports_dir, args.output, quality_data, service_levels)
 
     print(f"Reports written to {reports_dir}/")
 
@@ -320,18 +340,26 @@ def _run_shortcut_mode(
         tmp_dir = Path(tmp_str)
         json_file = tmp_dir / f"{args.output}.json"
         quality_data = _load_quality_data(json_file, repositories)
-        _write_reports(tmp_dir, args.output, quality_data)
+        service_levels = load_catalog(_resolve_catalog_path(args))
+        _write_reports(tmp_dir, args.output, quality_data, service_levels)
         details_file = tmp_dir / get_repository_details_filename(shortcut_repo)
         render_report_in_terminal(details_file.read_text())
 
 
-def _write_reports(reports_dir: Path, output: str, quality_data: dict) -> None:
+def _write_reports(
+    reports_dir: Path,
+    output: str,
+    quality_data: dict,
+    service_levels: dict[str, str] | None = None,
+) -> None:
     """Write all Markdown report files to *reports_dir*."""
     markdown_file = reports_dir / f"{output}.md"
     json_file = reports_dir / f"{output}.json"
 
     try:
-        markdown_file.write_text(render_markdown_overview(quality_data, output=output))
+        markdown_file.write_text(
+            render_markdown_overview(quality_data, output=output, service_levels=service_levels)
+        )
     except AttributeError:
         print(f"Failed to render markdown table from {json_file}, consider removing the cache.")
         sys.exit(1)

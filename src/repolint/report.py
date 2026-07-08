@@ -4,11 +4,13 @@
 """Report rendering and repository analysis orchestration."""
 
 import re
+from collections.abc import Callable
 from datetime import datetime
 
 from rich.console import Console
 from rich.markdown import Markdown
 
+from repolint.catalog import ALL_TIERS, TIER_LABELS
 from repolint.checks import CheckResult, list_checks
 from repolint.config import CheckStatus
 from repolint.utils import get_repository_details_filename, sanitize
@@ -87,7 +89,35 @@ def render_markdown_details(repo: str, quality_data: dict) -> str:
     return markdown
 
 
-def render_markdown_overview(quality_data: dict, output: str | None = None) -> str:
+def _render_overview_table(
+    repos: list[str],
+    repo_results_map: dict,
+    visible_checks: list[dict],
+    check_header_fn: Callable[[dict], str],
+) -> list[str]:
+    """Return table lines for a subset of repositories."""
+    headers = ["Repository"] + [check_header_fn(c) for c in visible_checks]
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(["---"] * len(headers)) + " |",
+    ]
+    for repo in repos:
+        repo_results = repo_results_map[repo]
+        row = [_repo_cell(repo)]
+        for check in visible_checks:
+            result = repo_results.get(check["name"])
+            if result is None:
+                raise RuntimeError(f"Missing result for {check['name']} in repository {repo}.")
+            row.append(_result_cell(result))
+        lines.append("| " + " | ".join(row) + " |")
+    return lines
+
+
+def render_markdown_overview(
+    quality_data: dict,
+    output: str | None = None,
+    service_levels: dict[str, str] | None = None,
+) -> str:
     """Render a Markdown table summarising all repositories against visible criteria.
 
     *quality_data* is the full quality JSON structure (``{"metadata": …,
@@ -96,6 +126,11 @@ def render_markdown_overview(quality_data: dict, output: str | None = None) -> s
 
     When *output* is provided, each parent check column header is linked to the
     corresponding parent check page ``{output}-{check_name}.md``.
+
+    When *service_levels* is a non-empty ``{repo: tier}`` mapping the overview
+    is split into four H2 sections — 🥇 Gold, 🥈 Silver, 🥉 Bronze, and
+    Unclassified — each containing its own table.  When absent or empty the
+    report is a single flat table (current default behaviour).
     """
     checks_meta: list[dict] = quality_data["metadata"]["checks"]
     results: dict = quality_data["results"]
@@ -110,25 +145,43 @@ def render_markdown_overview(quality_data: dict, output: str | None = None) -> s
             return f"<span title='{desc}'>[{c['name']}]({output}-{c['name']}.md)</span>"
         return f"<span title='{desc}'>{c['name']}</span>"
 
-    headers = ["Repository"] + [_check_header(c) for c in visible_checks]
-    table = [
-        "| " + " | ".join(headers) + " |",
-        "| " + " | ".join(["---"] * len(headers)) + " |",
-    ]
-
-    for repo, repo_results in results.items():
-        row = [_repo_cell(repo)]
-        for check in visible_checks:
-            result = repo_results.get(check["name"])
-            if result is None:
-                raise RuntimeError(f"Missing result for {check['name']} in repository {repo}.")
-            row.append(_result_cell(result))
-        table.append("| " + " | ".join(row) + " |")
-
     generated_at = (
         quality_data.get("metadata", {}).get("generated_at") or datetime.now().isoformat()
     )
-    return "\n".join(table) + "\n\nLast updated: " + generated_at
+    footer = "\n\nLast updated: " + generated_at
+
+    if not service_levels:
+        # Flat layout — preserve existing behaviour.
+        table_lines = _render_overview_table(
+            list(results.keys()), results, visible_checks, _check_header
+        )
+        return "\n".join(table_lines) + footer
+
+    # Tier-grouped layout.
+    tiers: dict[str, list[str]] = {tier: [] for tier in ALL_TIERS}
+    unclassified: list[str] = []
+    for repo in results:
+        tier = service_levels.get(repo)
+        if tier in tiers:
+            tiers[tier].append(repo)
+        else:
+            unclassified.append(repo)
+
+    sections: list[str] = []
+    for tier in ALL_TIERS:
+        repos_in_tier = tiers[tier]
+        label = TIER_LABELS[tier]
+        if not repos_in_tier:
+            sections.append(f"## {label}\n\n_No repositories in this tier._")
+            continue
+        table_lines = _render_overview_table(repos_in_tier, results, visible_checks, _check_header)
+        sections.append(f"## {label}\n\n" + "\n".join(table_lines))
+
+    if unclassified:
+        table_lines = _render_overview_table(unclassified, results, visible_checks, _check_header)
+        sections.append("## Unclassified\n\n" + "\n".join(table_lines))
+
+    return "\n\n".join(sections) + footer
 
 
 def render_markdown_parent_check(

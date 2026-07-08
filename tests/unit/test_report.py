@@ -3,6 +3,7 @@
 
 """Unit tests for repolint.report."""
 
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -614,3 +615,107 @@ class TestRenderReportInTerminal:
         captured = capsys.readouterr()
         assert "text" in captured.out
         assert "<span" not in captured.out
+
+
+# ---------------------------------------------------------------------------
+# render_markdown_overview — tier grouping
+# ---------------------------------------------------------------------------
+
+
+class TestRenderMarkdownOverviewTierGrouping:
+    """Tests for the gold/silver/bronze tier-grouped overview layout."""
+
+    _CHECKS_META: ClassVar[list[dict]] = [
+        {
+            "name": "github",
+            "description": "GitHub checks",
+            "children": [{"name": "github_topics", "description": "Topics"}],
+        }
+    ]
+
+    def _make_data(self, repos: list[str]) -> dict:
+        results = {
+            repo: {
+                "github": _result_dict(CheckStatus.COMPLIANT),
+                "github_topics": _result_dict(CheckStatus.COMPLIANT),
+            }
+            for repo in repos
+        }
+        return {
+            "metadata": {
+                "schema": "v0",
+                "generated_at": "2026-01-01T00:00:00",
+                "checks": self._CHECKS_META,
+            },
+            "results": results,
+        }
+
+    def test_flat_layout_when_no_service_levels(self):
+        repos = ["canonical/repo-a", "canonical/repo-b"]
+        quality_data = self._make_data(repos)
+        md = render_markdown_overview(quality_data)
+        # No H2 headings in flat layout
+        assert "## " not in md
+        assert "canonical/repo-a" in md
+        assert "canonical/repo-b" in md
+
+    def test_tier_headings_present_when_service_levels_provided(self):
+        repos = ["canonical/gold-repo", "canonical/silver-repo", "canonical/bronze-repo"]
+        quality_data = self._make_data(repos)
+        service_levels = {
+            "canonical/gold-repo": "gold",
+            "canonical/silver-repo": "silver",
+            "canonical/bronze-repo": "bronze",
+        }
+        md = render_markdown_overview(quality_data, service_levels=service_levels)
+        assert "## 🥇 Gold" in md
+        assert "## 🥈 Silver" in md
+        assert "## 🥉 Bronze" in md
+
+    def test_repos_appear_in_correct_tier_section(self):
+        repos = ["canonical/gold-repo", "canonical/bronze-repo"]
+        quality_data = self._make_data(repos)
+        service_levels = {
+            "canonical/gold-repo": "gold",
+            "canonical/bronze-repo": "bronze",
+        }
+        md = render_markdown_overview(quality_data, service_levels=service_levels)
+        gold_pos = md.index("## 🥇 Gold")
+        silver_pos = md.index("## 🥈 Silver")
+        bronze_pos = md.index("## 🥉 Bronze")
+        gold_repo_pos = md.index("canonical/gold-repo")
+        bronze_repo_pos = md.index("canonical/bronze-repo")
+        assert gold_pos < gold_repo_pos < silver_pos
+        assert bronze_pos < bronze_repo_pos
+
+    def test_unclassified_section_for_unknown_repos(self):
+        repos = ["canonical/known-repo", "canonical/unknown-repo"]
+        quality_data = self._make_data(repos)
+        service_levels = {"canonical/known-repo": "gold"}
+        md = render_markdown_overview(quality_data, service_levels=service_levels)
+        assert "## Unclassified" in md
+        assert "canonical/unknown-repo" in md
+
+    def test_no_unclassified_section_when_all_repos_classified(self):
+        repos = ["canonical/repo-a"]
+        quality_data = self._make_data(repos)
+        service_levels = {"canonical/repo-a": "gold"}
+        md = render_markdown_overview(quality_data, service_levels=service_levels)
+        assert "Unclassified" not in md
+
+    def test_empty_tier_shows_no_repos_message(self):
+        repos = ["canonical/gold-repo"]
+        quality_data = self._make_data(repos)
+        service_levels = {"canonical/gold-repo": "gold"}
+        md = render_markdown_overview(quality_data, service_levels=service_levels)
+        assert "_No repositories in this tier._" in md
+
+    def test_gold_section_appears_before_bronze(self):
+        repos = ["canonical/gold-repo", "canonical/bronze-repo"]
+        quality_data = self._make_data(repos)
+        service_levels = {
+            "canonical/gold-repo": "gold",
+            "canonical/bronze-repo": "bronze",
+        }
+        md = render_markdown_overview(quality_data, service_levels=service_levels)
+        assert md.index("## 🥇 Gold") < md.index("## 🥉 Bronze")
