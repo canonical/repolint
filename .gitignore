@@ -208,3 +208,6 @@ reports/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Local
+catalog.json
