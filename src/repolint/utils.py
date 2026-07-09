@@ -341,8 +341,16 @@ def find_regexp_in_path(path: Path, pattern: str, *, recursive: bool = False) ->
     Files larger than :data:`MAX_SCAN_BYTES` and files that aren't valid UTF-8
     (e.g. binaries) are skipped, keeping scans fast and memory-bounded.
     """
-    if not (path.exists() and path.is_dir()):
+    if not path.exists():
         return False
+
+    if path.is_file():
+        try:
+            content = path.read_text()
+        except UnicodeDecodeError:
+            return False  # binary or non-UTF-8 file
+        return re.search(pattern, content, re.DOTALL) is not None
+
     tracked = _get_git_tracked_files(path)
     glob = path.rglob("*") if recursive else path.glob("*")
     for file in glob:

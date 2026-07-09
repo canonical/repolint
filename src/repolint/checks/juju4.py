@@ -13,15 +13,13 @@ class Juju4Check(Check):
 
     name = "juju4"
     parent = "integration_tests"
-    depends_on = ["contains_charm"]  # noqa: RUF012
+    depends_on = ["contains_charm", "charmci"]  # noqa: RUF012
     description = "Repository has tests for Juju 4."
 
     def run(self, repo: str) -> CheckResult:
         """Check that the repository has at least one workflow targeting Juju 4."""
         local_repo = clone_repository_locally(repo)
-        expected_conf = "juju-channel:.*4/stable"
-        if find_regexp_in_path(local_repo / ".github/workflows", expected_conf):
-            return CheckResult(CheckStatus.COMPLIANT, "At least one workflow uses Juju 4.")
-        return CheckResult(
-            CheckStatus.NOT_COMPLIANT, f"No '{expected_conf}' found in GitHub workflow files."
-        )
+        expected_conf = "juju4"
+        if find_regexp_in_path(local_repo / "spread.yaml", expected_conf):
+            return CheckResult(CheckStatus.COMPLIANT, "At least one test uses Juju 4.")
+        return CheckResult(CheckStatus.NOT_COMPLIANT, f"No '{expected_conf}' spread.yaml.")
