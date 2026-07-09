@@ -20,9 +20,10 @@ class JubilantCheck(Check):
         """Check that all charms use Jubilant for integration testing."""
         local_repo = clone_repository_locally(repo)
         expected_conf = "import jubilant"
+        charms = find_charmcraft_paths(local_repo)
         found = [
             find_regexp_in_path(charm.parent / "tests" / "integration", pattern=expected_conf)
-            for charm in find_charmcraft_paths(local_repo)
+            for charm in charms
         ]
         if all(found):
             return CheckResult(CheckStatus.COMPLIANT, "All tests use Jubilant.")
