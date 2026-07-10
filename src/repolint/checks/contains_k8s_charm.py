@@ -20,10 +20,10 @@ class ContainsK8sCharmCheck(Check):
         """Check that the repository contains at least one Kubernetes charm."""
         local_repo = clone_repository_locally(repo)
         charms = find_charmcraft_paths(local_repo)
-        k8s_charms = [charm for charm in charms if "k8s-api" in charm.read_text()]
-        if k8s_charms:
-            return CheckResult(
-                CheckStatus.COMPLIANT,
-                "Kubernetes charms in: " + ", ".join(str(k) for k in k8s_charms),
-            )
+        for charm in charms:
+            if "k8s-api" in charm.read_text() or "extensions" in charm.read_text():
+                return CheckResult(
+                    CheckStatus.COMPLIANT,
+                    f"Kubernetes charm found: {charm}",
+                )
         return CheckResult(CheckStatus.NOT_COMPLIANT, "No k8s charms found in the repository.")
