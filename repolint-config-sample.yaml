@@ -1,0 +1,15 @@
+repository_query: org:canonical topic:platform-engineering
+
+checks:
+  github_topics:
+    patterns:
+    - "^squad-"
+    - "^product-"
+    - "^platform-engineering$"
+  codeowners:
+    valid_patterns:
+    - "canonical/platform-engineering-amer$"
+    - "canonical/platform-engineering-apac$"
+    - "canonical/platform-engineering-emea$"
+    invalid_patterns:
+    - "platform-engineering$"
