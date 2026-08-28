@@ -142,7 +142,18 @@ checks:
   github2jira:
     excluded:
       - canonical/my-charm   # no Jira integration required
+  codeowners:
+    excluded:
+      - canonical/my-charm   # no CODEOWNERS required
+    valid_patterns:
+      - "@canonical/my-team$"
+    invalid_patterns:
+      - "@individual-username"
 ```
+
+> A missing CODEOWNERS file is reported as ❌ unless the repository is
+> excluded. At least one of `valid_patterns` must match a non-comment line;
+> `invalid_patterns` must not match any line.
 
 > Excluded repositories are reported as ➖ for that check, distinct from `n/a`
 > (a dependency check was not met).
@@ -171,6 +182,7 @@ automatically.
 | --- | --- | --- |
 | `github_topics` | `github` | Repository has a topic matching every configured pattern (see `checks.github_topics.patterns`) |
 | `github2jira` | `github` | `.github/.jira_sync_config.yaml` is present |
+| `codeowners` | `github` | A CODEOWNERS file exists and matches configured patterns (see `checks.codeowners.valid_patterns` / `invalid_patterns`) |
 | `github_required_checks` | `github` | The default branch has at least one required status check |
 | `charmlibs` | `dependencies` | No imports of the deprecated `charms.operator_libs_linux` |
 | `ops_testing` | `unit_tests` | No references to the deprecated Harness testing API |

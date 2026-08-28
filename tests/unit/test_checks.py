@@ -618,3 +618,105 @@ class TestUseGhRunnersCheck:
         check = get_check("use_gh_runners")
         assert check is not None
         assert check.parent == "unit_tests"
+
+
+# ---------------------------------------------------------------------------
+# GithubCodeownersCheck
+# ---------------------------------------------------------------------------
+
+
+class TestGithubCodeownersCheck:
+    def setup_method(self):
+        configure_checks({})
+
+    def teardown_method(self):
+        configure_checks({})
+
+    def _patch_clone(self, tmp_path):
+        return patch(
+            "repolint.checks.github_codeowners.clone_repository_locally",
+            return_value=tmp_path,
+        )
+
+    def _get_check(self):
+        from repolint.checks.github_codeowners import GithubCodeownersCheck
+
+        return GithubCodeownersCheck()
+
+    def test_missing_codeowners_returns_not_compliant(self, tmp_path):
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "CODEOWNERS" in result.message
+
+    def test_root_codeowners_no_patterns_returns_compliant(self, tmp_path):
+        (tmp_path / "CODEOWNERS").write_text("* @canonical/my-team\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_github_dir_codeowners_is_found(self, tmp_path):
+        github_dir = tmp_path / ".github"
+        github_dir.mkdir()
+        (github_dir / "CODEOWNERS").write_text("* @canonical/my-team\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_docs_dir_codeowners_is_found(self, tmp_path):
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        (docs_dir / "CODEOWNERS").write_text("* @canonical/my-team\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_valid_pattern_matches_returns_compliant(self, tmp_path):
+        (tmp_path / "CODEOWNERS").write_text("# comment\n* @canonical/my-team\n")
+        configure_checks({"codeowners": {"valid_patterns": [r"@canonical/my-team$"]}})
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_valid_pattern_missing_returns_not_compliant(self, tmp_path):
+        (tmp_path / "CODEOWNERS").write_text("* @canonical/my-team\n")
+        configure_checks({"codeowners": {"valid_patterns": [r"@canonical/other-team$"]}})
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "@canonical/other-team$" in result.message
+
+    def test_any_valid_pattern_matching_returns_compliant(self, tmp_path):
+        (tmp_path / "CODEOWNERS").write_text("* @canonical/my-team\n")
+        configure_checks(
+            {"codeowners": {"valid_patterns": [r"@canonical/other-team$", r"@canonical/my-team$"]}}
+        )
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_invalid_pattern_matched_returns_not_compliant(self, tmp_path):
+        (tmp_path / "CODEOWNERS").write_text("* @some-individual\n")
+        configure_checks({"codeowners": {"invalid_patterns": [r"@some-individual"]}})
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "@some-individual" in result.message
+
+    def test_comment_and_blank_lines_are_ignored_for_matching(self, tmp_path):
+        (tmp_path / "CODEOWNERS").write_text("# @canonical/ignored-team\n\n* @canonical/my-team\n")
+        configure_checks({"codeowners": {"invalid_patterns": [r"@canonical/ignored-team"]}})
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_excluded_repo_returns_excluded(self, tmp_path):
+        configure_checks({"codeowners": {"excluded": ["canonical/my-charm"]}})
+        with self._patch_clone(tmp_path):
+            result = self._get_check()("canonical/my-charm")
+        assert result.result == CheckStatus.EXCLUDED
+
+    def test_check_has_github_parent(self):
+        check = get_check("codeowners")
+        assert check is not None
+        assert check.parent == "github"
