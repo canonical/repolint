@@ -128,6 +128,36 @@ class TestLoadConfig:
         with pytest.raises(ValueError, match="patterns"):
             load_config(config)
 
+    def test_loads_codeowners_valid_and_invalid_patterns(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "checks:\n  codeowners:\n"
+            "    valid_patterns:\n      - '@canonical/my-team$'\n"
+            "    invalid_patterns:\n      - '@individual-username'\n"
+        )
+        result = load_config(config)
+        assert result["checks"]["codeowners"]["valid_patterns"] == ["@canonical/my-team$"]
+        assert result["checks"]["codeowners"]["invalid_patterns"] == ["@individual-username"]
+
+    def test_raises_when_valid_patterns_not_a_list(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "checks:\n  codeowners:\n    valid_patterns: not-a-list\n"
+        )
+        with pytest.raises(ValueError, match="valid_patterns"):
+            load_config(config)
+
+    def test_raises_when_invalid_patterns_item_not_a_string(self, tmp_path):
+        config = tmp_path / "repolint.yaml"
+        config.write_text(
+            "repositories:\n  - canonical/charm-a\n"
+            "checks:\n  codeowners:\n    invalid_patterns:\n      - 123\n"
+        )
+        with pytest.raises(ValueError, match="invalid_patterns"):
+            load_config(config)
+
 
 class TestSearchRepositoriesByQuery:
     def test_returns_repository_list(self):

@@ -96,14 +96,17 @@ def _validate_checks(data: dict, config_path: Path) -> None:
         excluded = check_cfg.get("excluded", [])
         if not isinstance(excluded, list):
             raise ValueError(f"'checks.{check_name}.excluded' in {config_path} must be a list.")
-        patterns = check_cfg.get("patterns", [])
-        if not isinstance(patterns, list):
-            raise ValueError(f"'checks.{check_name}.patterns' in {config_path} must be a list.")
-        for i, p in enumerate(patterns):
-            if not isinstance(p, str):
+        for pattern_key in ("patterns", "valid_patterns", "invalid_patterns"):
+            patterns = check_cfg.get(pattern_key, [])
+            if not isinstance(patterns, list):
                 raise ValueError(
-                    f"'checks.{check_name}.patterns[{i}]' in {config_path} must be a string."
+                    f"'checks.{check_name}.{pattern_key}' in {config_path} must be a list."
                 )
+            for i, p in enumerate(patterns):
+                if not isinstance(p, str):
+                    raise ValueError(
+                        f"'checks.{check_name}.{pattern_key}[{i}]' in {config_path} must be a string."
+                    )
 
 
 def load_config(config_path: Path) -> dict:
