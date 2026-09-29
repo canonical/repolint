@@ -720,3 +720,165 @@ class TestGithubCodeownersCheck:
         check = get_check("codeowners")
         assert check is not None
         assert check.parent == "github"
+
+
+# ---------------------------------------------------------------------------
+# SupportedBasesCheck
+# ---------------------------------------------------------------------------
+
+
+class TestSupportedBasesCheck:
+    def setup_method(self):
+        configure_checks({})
+
+    def teardown_method(self):
+        configure_checks({})
+
+    def _patch_clone(self, tmp_path):
+        return patch(
+            "repolint.checks.supported_bases.clone_repository_locally",
+            return_value=tmp_path,
+        )
+
+    def _get_check(self):
+        from repolint.checks.supported_bases import SupportedBasesCheck
+
+        return SupportedBasesCheck()
+
+    def _write_charmcraft(self, tmp_path, content, subdir=None):
+        directory = tmp_path / subdir if subdir else tmp_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "charmcraft.yaml").write_text(content)
+
+    def test_platforms_with_target_base_returns_compliant(self, tmp_path):
+        self._write_charmcraft(
+            tmp_path,
+            "type: charm\nplatforms:\n  ubuntu@26.04:amd64:\n    build-on: [ubuntu@26.04:amd64]\n",
+        )
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_platforms_missing_target_base_returns_not_compliant(self, tmp_path):
+        self._write_charmcraft(
+            tmp_path,
+            "type: charm\nplatforms:\n  ubuntu@24.04:amd64:\n    build-on: [ubuntu@24.04:amd64]\n",
+        )
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "26.04" in result.message
+
+    def test_legacy_bases_key_returns_not_compliant(self, tmp_path):
+        self._write_charmcraft(
+            tmp_path,
+            'type: charm\nbases:\n  - build-on:\n      - name: ubuntu\n        channel: "24.04"\n',
+        )
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "deprecated" in result.message
+
+    def test_missing_platforms_key_returns_not_compliant(self, tmp_path):
+        self._write_charmcraft(tmp_path, "type: charm\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+
+    def test_multiple_charms_all_must_be_compliant(self, tmp_path):
+        self._write_charmcraft(
+            tmp_path,
+            "type: charm\nplatforms:\n  ubuntu@26.04:amd64: {}\n",
+            subdir="charm-a",
+        )
+        self._write_charmcraft(
+            tmp_path,
+            "type: charm\nplatforms:\n  ubuntu@24.04:amd64: {}\n",
+            subdir="charm-b",
+        )
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "charm-b" in result.message
+
+    def test_multiple_charms_all_compliant_returns_compliant(self, tmp_path):
+        self._write_charmcraft(
+            tmp_path,
+            "type: charm\nplatforms:\n  ubuntu@26.04:amd64: {}\n",
+            subdir="charm-a",
+        )
+        self._write_charmcraft(
+            tmp_path,
+            "type: charm\nplatforms:\n  ubuntu@26.04:amd64: {}\n",
+            subdir="charm-b",
+        )
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_malformed_yaml_returns_not_compliant(self, tmp_path):
+        self._write_charmcraft(tmp_path, "type: charm\nplatforms: [unterminated\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "could not parse" in result.message
+
+    def test_no_charms_returns_compliant(self, tmp_path):
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_check_has_charmhub_parent(self):
+        check = get_check("supported_bases")
+        assert check is not None
+        assert check.parent == "dependencies"
+
+    def test_depends_on_actively_maintained(self):
+        check = get_check("supported_bases")
+        assert check is not None
+        assert "actively_maintained" in check.depends_on
+
+
+# ---------------------------------------------------------------------------
+# ActivelyMaintainedCheck
+# ---------------------------------------------------------------------------
+
+
+class TestActivelyMaintainedCheck:
+    def setup_method(self):
+        configure_checks({})
+
+    def teardown_method(self):
+        configure_checks({})
+
+    def _get_check(self):
+        from repolint.checks.actively_maintained import ActivelyMaintainedCheck
+
+        return ActivelyMaintainedCheck()
+
+    def _patch_topics(self, topics):
+        return patch(
+            "repolint.checks.actively_maintained.get_repository_topics",
+            return_value=topics,
+        )
+
+    def test_no_maintenance_topic_returns_compliant(self):
+        with self._patch_topics(["squad-emea", "platform-engineering"]):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_no_topics_returns_compliant(self):
+        with self._patch_topics([]):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_maintenance_topic_returns_not_compliant(self):
+        with self._patch_topics(["maintenance-mode"]):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "maintenance-mode" in result.message
+
+    def test_check_is_internal(self):
+        check = get_check("actively_maintained")
+        assert check is not None
+        assert check.parent == "_internal"

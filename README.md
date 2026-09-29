@@ -190,8 +190,10 @@ automatically.
 | `juju4` | `integration_tests` | At least one workflow targets Juju 4/stable |
 | `ck8s` | `integration_tests` | GitHub workflows set `use-canonical-k8s: true` |
 | `tf_v1` | `terraform` | All `versions.tf` files pin Juju provider `~> 1.*` |
+| `supported_bases` | `dependencies` | All charms declare support for the most recent Ubuntu base (26.04) via `platforms`, not the deprecated `bases` key |
 | `contains_charm` | _(internal)_ | Repository contains at least one `charmcraft.yaml` |
 | `contains_k8s_charm` | _(internal)_ | Repository contains at least one Kubernetes charm |
+| `actively_maintained` | _(internal)_ | Repository does not have the 'maintenance-mode' GitHub topic set |
 
 ### Check result symbols
 
