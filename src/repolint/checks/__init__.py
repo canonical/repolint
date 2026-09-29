@@ -9,6 +9,7 @@ and registers ``ParentCheck`` instances (which self-register on construction).
 
 # Import leaf-check modules to trigger auto-registration via __init_subclass__.
 from repolint.checks import (  # noqa: F401
+    actively_maintained,
     charmci,
     charmlibs,
     ck8s,
@@ -21,6 +22,7 @@ from repolint.checks import (  # noqa: F401
     jubilant,
     juju4,
     ops_testing,
+    supported_bases,
     tf_v1,
     use_gh_runners,
 )
