@@ -934,6 +934,136 @@ class TestRootlessCharmCheck:
         assert result.result == CheckStatus.NOT_ELIGIBLE
 
 
+class TestContainsRockCheck:
+    def setup_method(self):
+        configure_checks({})
+
+    def teardown_method(self):
+        configure_checks({})
+
+    def _patch_clone(self, tmp_path):
+        return patch(
+            "repolint.checks.contains_rock.clone_repository_locally",
+            return_value=tmp_path,
+        )
+
+    def _get_check(self):
+        from repolint.checks.contains_rock import ContainsRockCheck
+
+        return ContainsRockCheck()
+
+    def _write_rockcraft(self, tmp_path, content, subdir=None):
+        directory = tmp_path / subdir if subdir else tmp_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "rockcraft.yaml").write_text(content)
+
+    def test_no_rocks_returns_not_compliant(self, tmp_path):
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+
+    def test_rock_present_returns_compliant(self, tmp_path):
+        self._write_rockcraft(tmp_path, "name: my-rock\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-rock")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_check_has_internal_parent(self):
+        check = get_check("contains_rock")
+        assert check is not None
+        assert check.parent == "_internal"
+
+
+class TestRootlessRockCheck:
+    def setup_method(self):
+        configure_checks({})
+
+    def teardown_method(self):
+        configure_checks({})
+
+    def _patch_clone(self, tmp_path):
+        return patch(
+            "repolint.checks.rootless_rock.clone_repository_locally",
+            return_value=tmp_path,
+        )
+
+    def _get_check(self):
+        from repolint.checks.rootless_rock import RootlessRockCheck
+
+        return RootlessRockCheck()
+
+    def _write_rockcraft(self, tmp_path, content, subdir=None):
+        directory = tmp_path / subdir if subdir else tmp_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "rockcraft.yaml").write_text(content)
+
+    def test_non_root_run_user_returns_compliant(self, tmp_path):
+        self._write_rockcraft(tmp_path, "name: my-rock\nrun-user: _daemon_\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-rock")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_root_run_user_returns_not_compliant(self, tmp_path):
+        self._write_rockcraft(tmp_path, "name: my-rock\nrun-user: root\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-rock")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "root" in result.message
+
+    def test_missing_run_user_key_returns_not_compliant(self, tmp_path):
+        self._write_rockcraft(tmp_path, "name: my-rock\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-rock")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "missing" in result.message
+
+    def test_malformed_yaml_returns_not_compliant(self, tmp_path):
+        self._write_rockcraft(tmp_path, "name: my-rock\nrun-user: [unterminated\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-rock")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "could not parse" in result.message
+
+    def test_multiple_rocks_all_must_be_compliant(self, tmp_path):
+        self._write_rockcraft(tmp_path, "name: rock-a\nrun-user: _daemon_\n", subdir="rock-a")
+        self._write_rockcraft(tmp_path, "name: rock-b\nrun-user: root\n", subdir="rock-b")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "rock-b" in result.message
+
+    def test_multiple_rocks_all_compliant_returns_compliant(self, tmp_path):
+        self._write_rockcraft(tmp_path, "name: rock-a\nrun-user: _daemon_\n", subdir="rock-a")
+        self._write_rockcraft(tmp_path, "name: rock-b\nrun-user: _daemon_\n", subdir="rock-b")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_no_rocks_returns_compliant(self, tmp_path):
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_check_has_security_parent(self):
+        check = get_check("rootless_rock")
+        assert check is not None
+        assert check.parent == "security"
+
+    def test_depends_on_contains_rock(self):
+        check = get_check("rootless_rock")
+        assert check is not None
+        assert "contains_rock" in check.depends_on
+
+    def test_not_eligible_when_contains_rock_not_compliant(self):
+        check = get_check("rootless_rock")
+        assert check is not None
+        previous_results = {
+            "contains_rock": CheckResult(CheckStatus.NOT_COMPLIANT, "No rocks found."),
+        }
+        result = check("canonical/my-repo", previous_results)
+        assert result.result == CheckStatus.NOT_ELIGIBLE
+
+
 class TestActivelyMaintainedCheck:
     def setup_method(self):
         configure_checks({})

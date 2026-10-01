@@ -302,6 +302,15 @@ def find_charmcraft_paths(path: Path) -> list[Path]:
     return [f for f in charmcraft_files if "tests" not in str(f.parent)]
 
 
+def find_rockcraft_paths(path: Path) -> list[Path]:
+    """Find all rockcraft.yaml files in path, excluding test directories."""
+    tracked = _get_git_tracked_files(path)
+    rockcraft_files = list(path.rglob("rockcraft.yaml"))
+    if tracked is not None:
+        rockcraft_files = [f for f in rockcraft_files if f in tracked]
+    return [f for f in rockcraft_files if "tests" not in str(f.parent)]
+
+
 def find_files_in_path(path: Path, filename: str) -> list[Path]:
     """Find all files with a specific name under the given directory."""
     if not (path.exists() and path.is_dir()):

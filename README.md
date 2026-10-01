@@ -175,7 +175,7 @@ automatically.
 | `unit_tests` | Repository follows unit testing best practices (no Harness) |
 | `integration_tests` | Repository follows integration testing best practices (Jubilant, Juju 4, CK8s) |
 | `terraform` | Repository follows Terraform best practices (Juju provider v1) |
-| `security` | Repository follows charm security best practices |
+| `security` | Repository follows charm and rock security best practices |
 
 ### Sub-checks (hidden in the overview, visible in per-repository detail reports)
 
@@ -193,7 +193,9 @@ automatically.
 | `tf_v1` | `terraform` | All `versions.tf` files pin Juju provider `~> 1.*` |
 | `supported_bases` | `dependencies` | All charms declare support for the most recent Ubuntu base (26.04) via `platforms`, not the deprecated `bases` key |
 | `rootless_charm` | `security` | All charms declare a non-root `charm-user` in charmcraft.yaml |
+| `rootless_rock` | `security` | All rocks declare a non-root `run-user` in rockcraft.yaml |
 | `contains_charm` | _(internal)_ | Repository contains at least one `charmcraft.yaml` |
+| `contains_rock` | _(internal)_ | Repository contains at least one `rockcraft.yaml` |
 | `contains_k8s_charm` | _(internal)_ | Repository contains at least one Kubernetes charm |
 | `actively_maintained` | _(internal)_ | Repository does not have the 'maintenance-mode' GitHub topic set |
 
