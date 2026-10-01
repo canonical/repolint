@@ -15,6 +15,7 @@ from repolint.checks import (  # noqa: F401
     ck8s,
     contains_charm,
     contains_k8s_charm,
+    contains_rock,
     github2jira,
     github_codeowners,
     github_required_checks,
@@ -23,6 +24,7 @@ from repolint.checks import (  # noqa: F401
     juju4,
     ops_testing,
     rootless_charm,
+    rootless_rock,
     supported_bases,
     tf_v1,
     use_gh_runners,
@@ -65,8 +67,7 @@ ParentCheck(
 )
 ParentCheck(
     "security",
-    description="Repository follows our charm security best practices.",
-    depends_on=["contains_charm"],
+    description="Repository follows our charm and rock security best practices.",
 )
 
 __all__ = [
