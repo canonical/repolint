@@ -844,6 +844,96 @@ class TestSupportedBasesCheck:
 # ---------------------------------------------------------------------------
 
 
+class TestRootlessCharmCheck:
+    def setup_method(self):
+        configure_checks({})
+
+    def teardown_method(self):
+        configure_checks({})
+
+    def _patch_clone(self, tmp_path):
+        return patch(
+            "repolint.checks.rootless_charm.clone_repository_locally",
+            return_value=tmp_path,
+        )
+
+    def _get_check(self):
+        from repolint.checks.rootless_charm import RootlessCharmCheck
+
+        return RootlessCharmCheck()
+
+    def _write_charmcraft(self, tmp_path, content, subdir=None):
+        directory = tmp_path / subdir if subdir else tmp_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "charmcraft.yaml").write_text(content)
+
+    def test_non_root_charm_user_returns_compliant(self, tmp_path):
+        self._write_charmcraft(tmp_path, "type: charm\ncharm-user: sudoer\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_root_charm_user_returns_not_compliant(self, tmp_path):
+        self._write_charmcraft(tmp_path, "type: charm\ncharm-user: root\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "root" in result.message
+
+    def test_missing_charm_user_key_returns_not_compliant(self, tmp_path):
+        self._write_charmcraft(tmp_path, "type: charm\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "missing" in result.message
+
+    def test_malformed_yaml_returns_not_compliant(self, tmp_path):
+        self._write_charmcraft(tmp_path, "type: charm\ncharm-user: [unterminated\n")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-charm")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "could not parse" in result.message
+
+    def test_multiple_charms_all_must_be_compliant(self, tmp_path):
+        self._write_charmcraft(tmp_path, "type: charm\ncharm-user: sudoer\n", subdir="charm-a")
+        self._write_charmcraft(tmp_path, "type: charm\ncharm-user: root\n", subdir="charm-b")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "charm-b" in result.message
+
+    def test_multiple_charms_all_compliant_returns_compliant(self, tmp_path):
+        self._write_charmcraft(tmp_path, "type: charm\ncharm-user: sudoer\n", subdir="charm-a")
+        self._write_charmcraft(tmp_path, "type: charm\ncharm-user: sudoer\n", subdir="charm-b")
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_no_charms_returns_compliant(self, tmp_path):
+        with self._patch_clone(tmp_path):
+            result = self._get_check().run("canonical/my-repo")
+        assert result.result == CheckStatus.COMPLIANT
+
+    def test_check_has_security_parent(self):
+        check = get_check("rootless_charm")
+        assert check is not None
+        assert check.parent == "security"
+
+    def test_depends_on_contains_charm(self):
+        check = get_check("rootless_charm")
+        assert check is not None
+        assert "contains_charm" in check.depends_on
+
+    def test_not_eligible_when_contains_charm_not_compliant(self):
+        check = get_check("rootless_charm")
+        assert check is not None
+        previous_results = {
+            "contains_charm": CheckResult(CheckStatus.NOT_COMPLIANT, "No charms found."),
+        }
+        result = check("canonical/my-repo", previous_results)
+        assert result.result == CheckStatus.NOT_ELIGIBLE
+
+
 class TestActivelyMaintainedCheck:
     def setup_method(self):
         configure_checks({})

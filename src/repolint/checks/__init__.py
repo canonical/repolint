@@ -22,6 +22,7 @@ from repolint.checks import (  # noqa: F401
     jubilant,
     juju4,
     ops_testing,
+    rootless_charm,
     supported_bases,
     tf_v1,
     use_gh_runners,
@@ -60,6 +61,11 @@ ParentCheck(
 ParentCheck(
     "dependencies",
     description="Repository uses up-to-date charm libraries and avoids deprecated dependencies.",
+    depends_on=["contains_charm"],
+)
+ParentCheck(
+    "security",
+    description="Repository follows our charm security best practices.",
     depends_on=["contains_charm"],
 )
 
