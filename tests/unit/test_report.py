@@ -551,6 +551,10 @@ class TestAnalyzeRepo:
             patch("repolint.checks.ck8s.clone_repository_locally", return_value=tmp_path),
             patch("repolint.checks.jubilant.clone_repository_locally", return_value=tmp_path),
             patch("repolint.checks.tf_v1.clone_repository_locally", return_value=tmp_path),
+            patch(
+                "repolint.checks.tf_cc008.TfCc008Check.run",
+                return_value=CheckResult(CheckStatus.COMPLIANT),
+            ),
             patch("repolint.checks.charmlibs.clone_repository_locally", return_value=tmp_path),
             patch(
                 "repolint.checks.use_gh_runners.clone_repository_locally",

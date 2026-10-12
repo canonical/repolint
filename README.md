@@ -191,6 +191,7 @@ automatically.
 | `juju4` | `integration_tests` | At least one workflow targets Juju 4/stable |
 | `ck8s` | `integration_tests` | GitHub workflows set `use-canonical-k8s: true` |
 | `tf_v1` | `terraform` | All `versions.tf` files pin Juju provider `~> 1.*` |
+| `tf_cc008` | `terraform` | `terraform-check-all` (CC008 Terraform compliance) exits with code 0 |
 | `supported_bases` | `dependencies` | All charms declare support for the most recent Ubuntu base (26.04) via `platforms`, not the deprecated `bases` key |
 | `rootless_charm` | `security` | All charms declare a non-root `charm-user` in charmcraft.yaml |
 | `rootless_rock` | `security` | All rocks declare a non-root `run-user` in rockcraft.yaml |
