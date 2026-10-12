@@ -3,6 +3,7 @@
 
 """Unit tests for repolint.checks — Check base class and registry."""
 
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -1132,3 +1133,27 @@ class TestJuju4Check:
     def test_spread_juju4_compliant(self, tmp_path):
         (tmp_path / "spread.yaml").write_text("suites:\n  juju4/:\n")
         assert self._run(tmp_path).result == CheckStatus.COMPLIANT
+
+
+class TestTfCc008Check:
+    def _run(self, tmp_path, returncode):
+        completed = subprocess.CompletedProcess([], returncode, stdout="out", stderr="err")
+        with (
+            patch("repolint.checks.tf_cc008.clone_repository_locally", return_value=tmp_path),
+            patch("repolint.checks.tf_cc008.subprocess.run", return_value=completed) as run,
+        ):
+            result = get_check("tf_cc008").run("canonical/x")
+        return result, run
+
+    def test_exit_zero_compliant(self, tmp_path):
+        result, run = self._run(tmp_path, 0)
+        assert result.result == CheckStatus.COMPLIANT
+        command = run.call_args.args[0]
+        assert command[0] == "uvx"
+        assert command[-2:] == ["terraform-check-all", "."]
+        assert run.call_args.kwargs["cwd"] == tmp_path
+
+    def test_nonzero_not_compliant(self, tmp_path):
+        result, _ = self._run(tmp_path, 1)
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "exit code 1" in result.message

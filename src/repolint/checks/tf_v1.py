@@ -13,7 +13,7 @@ class TfV1Check(Check):
 
     name = "tf_v1"
     parent = "terraform"
-    depends_on = ["contains_charm"]  # noqa: RUF012
+    depends_on = ["contains_charm", "actively_maintained"]  # noqa: RUF012
     description = "Repository uses Terraform Juju provider v1."
 
     def run(self, repo: str) -> CheckResult:

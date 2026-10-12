@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.0] - 2026-10-12
+
+### Added
+
+- `tf_cc008` check (parent `terraform`): runs the CC008 Terraform compliance tool (`terraform-check-all`) via `uvx` in the repository and passes when it exits with code 0.
+
+### Changed
+
+- `tf_v1` check now depends on `actively_maintained`.
+
 ## [0.11.0] - 2026-10-12
 
 ### Changed

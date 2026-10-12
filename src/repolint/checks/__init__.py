@@ -26,6 +26,7 @@ from repolint.checks import (  # noqa: F401
     rootless_charm,
     rootless_rock,
     supported_bases,
+    tf_cc008,
     tf_v1,
     use_gh_runners,
 )
