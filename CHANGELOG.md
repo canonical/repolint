@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0] - 2026-10-12
+
+### Changed
+
+- `juju4` check: also passes when a tracked `concierge-*.yaml` file sets `juju.channel` to a Juju 4 channel (value starting with `4`), in addition to a `juju4` reference in `spread.yaml`. It now depends on `actively_maintained`.
+- `charmci` check now depends on `actively_maintained`.
+
 ## [0.7.0] - 2026-04-22
 
 ### Added
