@@ -1102,3 +1102,33 @@ class TestActivelyMaintainedCheck:
         check = get_check("actively_maintained")
         assert check is not None
         assert check.parent == "_internal"
+
+
+class TestJuju4Check:
+    def _run(self, tmp_path):
+        with patch("repolint.checks.juju4.clone_repository_locally", return_value=tmp_path):
+            return get_check("juju4").run("canonical/x")
+
+    def test_concierge_juju4_compliant(self, tmp_path):
+        (tmp_path / "concierge-lxd.yaml").write_text("juju:\n  channel: 4.1/edge\n")
+        assert self._run(tmp_path).result == CheckStatus.COMPLIANT
+
+    def test_one_of_several_matches(self, tmp_path):
+        (tmp_path / "concierge-a.yaml").write_text("juju:\n  channel: 3.6/stable\n")
+        (tmp_path / "concierge-b.yaml").write_text("juju:\n  channel: 4/edge\n")
+        assert self._run(tmp_path).result == CheckStatus.COMPLIANT
+
+    def test_juju3_not_compliant(self, tmp_path):
+        (tmp_path / "concierge-a.yaml").write_text("juju:\n  channel: 3.6/stable\n")
+        assert self._run(tmp_path).result == CheckStatus.NOT_COMPLIANT
+
+    def test_no_files_not_compliant(self, tmp_path):
+        assert self._run(tmp_path).result == CheckStatus.NOT_COMPLIANT
+
+    def test_invalid_yaml_not_compliant(self, tmp_path):
+        (tmp_path / "concierge-a.yaml").write_text("juju: [unclosed")
+        assert self._run(tmp_path).result == CheckStatus.NOT_COMPLIANT
+
+    def test_spread_juju4_compliant(self, tmp_path):
+        (tmp_path / "spread.yaml").write_text("suites:\n  juju4/:\n")
+        assert self._run(tmp_path).result == CheckStatus.COMPLIANT

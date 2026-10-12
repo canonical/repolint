@@ -13,7 +13,7 @@ class CharmCiCheck(Check):
 
     name = "charmci"
     parent = "integration_tests"
-    depends_on = ["contains_charm"]  # noqa: RUF012
+    depends_on = ["contains_charm", "actively_maintained"]  # noqa: RUF012
     description = "Repository uses charm-ci for testing."
 
     def run(self, repo: str) -> CheckResult:
