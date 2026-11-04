@@ -1157,3 +1157,58 @@ class TestTfCc008Check:
         result, _ = self._run(tmp_path, 1)
         assert result.result == CheckStatus.NOT_COMPLIANT
         assert "exit code 1" in result.message
+
+
+# ---------------------------------------------------------------------------
+# Github2JiraCheck
+# ---------------------------------------------------------------------------
+
+_JIRA_VALID = """# template-version: 1
+settings:
+  jira_project_key: "ISD"
+  labels:
+  - bug
+  components:
+  - my-component
+"""
+
+
+class TestGithub2JiraCheck:
+    def _run(self, tmp_path, content):
+        (tmp_path / ".github").mkdir()
+        if content is not None:
+            (tmp_path / ".github/.jira_sync_config.yaml").write_text(content)
+        with patch("repolint.checks.github2jira.clone_repository_locally", return_value=tmp_path):
+            return get_check("github2jira").run("canonical/repo")
+
+    def test_missing_file(self, tmp_path):
+        assert self._run(tmp_path, None).result == CheckStatus.NOT_COMPLIANT
+
+    def test_valid(self, tmp_path):
+        assert self._run(tmp_path, _JIRA_VALID).result == CheckStatus.COMPLIANT
+
+    def test_missing_version(self, tmp_path):
+        result = self._run(tmp_path, _JIRA_VALID.replace("# template-version: 1\n", ""))
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "template-version" in result.message
+
+    def test_missing_labels(self, tmp_path):
+        result = self._run(tmp_path, _JIRA_VALID.replace("  labels:\n  - bug\n", ""))
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "labels" in result.message
+
+    def test_singular_component_key(self, tmp_path):
+        content = _JIRA_VALID.replace("  components:", "  component:")
+        result = self._run(tmp_path, content)
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "settings.component'" in result.message
+
+    def test_multiple_components(self, tmp_path):
+        result = self._run(tmp_path, _JIRA_VALID + "  - other\n")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "component" in result.message
+
+    def test_epic_key(self, tmp_path):
+        result = self._run(tmp_path, _JIRA_VALID + "  epic_key: ISD-1\n")
+        assert result.result == CheckStatus.NOT_COMPLIANT
+        assert "epic_key" in result.message
